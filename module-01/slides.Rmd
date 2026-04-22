@@ -1,0 +1,444 @@
+---
+title: "Module 1: The Experimental Ideal"
+subtitle: "Potential Outcomes, Selection Bias, and Why Randomization Works"
+output:
+  xaringan::moon_reader:
+    css: [default, default-fonts]
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+      ratio: "16:9"
+---
+
+```{css, echo=FALSE}
+.remark-code, .remark-inline-code { font-size: 80%; }
+.remark-slide-content { padding: 1em 2em; }
+.small { font-size: 80%; }
+.tiny { font-size: 65%; }
+.highlight-box {
+  background: #fff3e0;
+  border-left: 4px solid #e65100;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+.blue-box {
+  background: #e3f2fd;
+  border-left: 4px solid #1565c0;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, fig.align = "center",
+  fig.width = 10, fig.height = 4.2, dpi = 150,
+  message = FALSE, warning = FALSE
+)
+library(tidyverse)
+library(estimatr)
+theme_set(theme_minimal(base_size = 14))
+set.seed(42)
+```
+
+# Course Map
+
+<table>
+<tr><th>#</th><th>Module</th><th>Status</th></tr>
+<tr><td><b>1</b></td><td><b>The Experimental Ideal</b> <i>(you are here)</i></td><td>current</td></tr>
+<tr><td>2</td><td>SUTVA and When It Breaks</td><td>upcoming</td></tr>
+<tr><td>3</td><td>Designing Around Interference</td><td>upcoming</td></tr>
+<tr><td>4</td><td>Power and Sample Size</td><td>upcoming</td></tr>
+<tr><td>5</td><td>Analyzing Experiments</td><td>upcoming</td></tr>
+<tr><td>6</td><td>Multiple Testing & Subgroups</td><td>upcoming</td></tr>
+<tr><td>7</td><td>External Validity</td><td>upcoming</td></tr>
+<tr><td>8</td><td>Advanced Topics</td><td>upcoming</td></tr>
+</table>
+
+---
+
+# The Setup: A Driver Bonus Experiment
+
+A ride-sharing platform wants to know: **does offering a $500 sign-on bonus increase driver retention at 6 months?**
+
+--
+
+The product team looks at the data:
+
+```{r naive-data, echo=FALSE}
+n <- 1000
+drivers <- tibble(
+  motivation = rnorm(n),
+  # More motivated drivers are more likely to seek out the bonus
+  got_bonus = rbinom(n, 1, prob = plogis(0.8 * motivation)),
+  # Retention depends on motivation AND bonus (true effect = 10pp)
+  retained_6mo = rbinom(n, 1, prob = plogis(-0.3 + 0.4 * motivation +
+                                               0.4 * got_bonus))
+)
+
+drivers |>
+  group_by(got_bonus) |>
+  summarise(n = n(), retention_rate = mean(retained_6mo)) |>
+  mutate(got_bonus = if_else(got_bonus == 1, "Got bonus", "No bonus")) |>
+  knitr::kable(col.names = c("Group", "N", "Retention rate"), digits = 3)
+```
+
+--
+
+"The bonus increases retention by ~15 percentage points! Ship it!"
+
+...or does it?
+
+---
+
+# The Fundamental Problem
+
+We want to know the **causal effect** of the bonus on retention for each driver $i$:
+
+$$\tau_i = Y_i(1) - Y_i(0)$$
+
+--
+
+| Driver | $Y_i(1)$ (with bonus) | $Y_i(0)$ (without) | Effect |
+|--------|----------------------|---------------------|--------|
+| Alice  | 1 (retained)         | ?                   | ?      |
+| Bob    | ?                    | 0 (churned)         | ?      |
+| Carol  | 1 (retained)         | ?                   | ?      |
+| Dave   | ?                    | 1 (retained)        | ?      |
+
+--
+
+We only observe **one** potential outcome per driver. The other is the *counterfactual* — it doesn't exist in the data. We can never compute $\tau_i$ directly.
+
+---
+
+# What We *Can* Estimate: Average Effects
+
+Even though individual effects are unobservable, we can estimate **averages**:
+
+--
+
+- **ATE** = $E[Y_i(1) - Y_i(0)]$ — average effect across *everyone*
+
+--
+
+- **ATT** = $E[Y_i(1) - Y_i(0) \mid D_i = 1]$ — average effect on those who *got* treatment
+
+--
+
+- **ATU** = $E[Y_i(1) - Y_i(0) \mid D_i = 0]$ — average effect on the *untreated*
+
+--
+
+.highlight-box[
+**When do these differ?** When (1) treatment effects are heterogeneous AND (2) who gets treated is correlated with the effect. Example: if motivated drivers both seek the bonus AND benefit more from it, then ATT > ATE > ATU.
+]
+
+---
+
+# Selection Bias: The Decomposition
+
+The naive comparison — difference in observed means — is:
+
+$$E[Y_i \mid D_i = 1] - E[Y_i \mid D_i = 0]$$
+
+--
+
+This equals:
+
+$$= \underbrace{E[Y_i(1) - Y_i(0) \mid D_i = 1]}_{\text{ATT}} + \underbrace{E[Y_i(0) \mid D_i = 1] - E[Y_i(0) \mid D_i = 0]}_{\text{selection bias}}$$
+
+--
+
+.highlight-box[
+**Selection bias** = the difference in *baseline* outcomes between the groups. Drivers who sought out the bonus were more motivated → they would have had higher retention *even without the bonus*.
+]
+
+---
+
+# Selection Bias: Visualized
+
+```{r selection-bias-viz, echo=FALSE, fig.height=4}
+drivers |>
+  mutate(Group = if_else(got_bonus == 1, "Got bonus", "No bonus")) |>
+  ggplot(aes(motivation, fill = Group)) +
+  geom_density(alpha = 0.5) +
+  geom_vline(data = drivers |>
+               group_by(got_bonus) |>
+               summarise(m = mean(motivation)) |>
+               mutate(Group = if_else(got_bonus == 1, "Got bonus", "No bonus")),
+             aes(xintercept = m, color = Group),
+             linetype = "dashed", linewidth = 1) +
+  labs(title = "The groups are NOT comparable",
+       subtitle = "Drivers who got the bonus have higher baseline motivation",
+       x = "Motivation (unobserved)", y = "Density") +
+  theme(legend.position = "top")
+```
+
+The bonus group has higher motivation on average → higher retention *regardless of the bonus*. The naive estimate conflates the bonus effect with pre-existing differences.
+
+---
+
+# Randomization: The Fix
+
+Randomly assign 500 drivers to bonus, 500 to control:
+
+```{r randomize}
+n <- 1000
+rct <- tibble(
+  driver_id = 1:n,
+  motivation = rnorm(n),
+  # Random assignment — independent of motivation
+  bonus = sample(rep(c(0, 1), each = n/2)),
+  # True effect of bonus = 10pp (0.4 on logit scale)
+  retained = rbinom(n, 1, prob = plogis(-0.3 + 0.4 * motivation +
+                                          0.4 * bonus))
+)
+```
+
+--
+
+```{r rct-balance, echo=FALSE}
+rct |>
+  group_by(bonus) |>
+  summarise(n = n(), mean_motivation = mean(motivation),
+            retention = mean(retained)) |>
+  mutate(bonus = if_else(bonus == 1, "Bonus", "Control")) |>
+  knitr::kable(digits = 3, col.names = c("Group", "N", "Mean motivation",
+                                          "Retention"))
+```
+
+Motivation is balanced (by construction). The difference in retention is an unbiased estimate of the ATE.
+
+---
+
+# Why Does Randomization Work?
+
+Random assignment makes treatment independent of potential outcomes:
+
+$$(Y_i(1), Y_i(0)) \perp D_i$$
+
+--
+
+This kills selection bias:
+
+$$E[Y_i(0) \mid D_i = 1] = E[Y_i(0) \mid D_i = 0]$$
+
+--
+
+So the simple difference in means equals the ATE:
+
+$$E[Y \mid D=1] - E[Y \mid D=0] = E[Y(1)] - E[Y(0)] = \text{ATE}$$
+
+--
+
+.blue-box[
+**But:** randomization guarantees this *in expectation*, not in every sample. Any given experiment can have imbalanced covariates by chance. That's what inference (confidence intervals, p-values) is for.
+]
+
+---
+
+# Simulation: Randomization Works in Expectation
+
+```{r sim-many-rcts, echo=FALSE, fig.height=3.8}
+true_ate <- mean(plogis(-0.3 + 0.4 * rct$motivation + 0.4) -
+                   plogis(-0.3 + 0.4 * rct$motivation))
+
+sim_rct <- function(i) {
+  bonus <- sample(rep(c(0, 1), each = n/2))
+  retained <- rbinom(n, 1, prob = plogis(-0.3 + 0.4 * rct$motivation +
+                                           0.4 * bonus))
+  mean(retained[bonus == 1]) - mean(retained[bonus == 0])
+}
+
+estimates <- tibble(
+  estimate = map_dbl(1:1000, sim_rct)
+)
+
+ggplot(estimates, aes(estimate)) +
+  geom_histogram(bins = 40, fill = "steelblue", alpha = 0.7) +
+  geom_vline(xintercept = true_ate, color = "firebrick",
+             linewidth = 1.2, linetype = "dashed") +
+  annotate("text", x = true_ate + 0.005, y = 60,
+           label = paste("True ATE =", round(true_ate, 3)),
+           color = "firebrick", hjust = 0, size = 4) +
+  labs(title = "1,000 simulated RCTs: estimates centered on the truth",
+       subtitle = "Each bar is one experiment. Variation = sampling noise, not bias.",
+       x = "Estimated ATE (difference in retention rates)", y = "Count")
+```
+
+---
+
+# The Naive Estimate Is Biased
+
+```{r sim-naive, echo=FALSE, fig.height=3.8}
+sim_naive <- function(i) {
+  # Non-random: motivated drivers more likely to get bonus
+  bonus <- rbinom(n, 1, prob = plogis(0.8 * rct$motivation))
+  retained <- rbinom(n, 1, prob = plogis(-0.3 + 0.4 * rct$motivation +
+                                           0.4 * bonus))
+  mean(retained[bonus == 1]) - mean(retained[bonus == 0])
+}
+
+naive_estimates <- tibble(estimate = map_dbl(1:1000, sim_naive))
+
+bind_rows(
+  estimates |> mutate(method = "Randomized"),
+  naive_estimates |> mutate(method = "Observational (naive)")
+) |>
+  ggplot(aes(estimate, fill = method)) +
+  geom_histogram(bins = 40, alpha = 0.6, position = "identity") +
+  geom_vline(xintercept = true_ate, color = "firebrick",
+             linewidth = 1.2, linetype = "dashed") +
+  labs(title = "Randomized vs Naive: bias is visible",
+       subtitle = "Naive estimates are systematically too high (selection bias)",
+       x = "Estimated effect", y = "Count") +
+  theme(legend.position = "top")
+```
+
+The naive distribution is shifted right — it **overestimates** the effect because motivated drivers both seek the bonus and retain more.
+
+---
+
+# Numerical Decomposition
+
+.pull-left[
+```{r decompose, echo=FALSE}
+# Compute the decomposition for one observational sample
+set.seed(99)
+bonus_obs <- rbinom(n, 1, prob = plogis(0.8 * rct$motivation))
+y1 <- plogis(-0.3 + 0.4 * rct$motivation + 0.4)  # potential outcome under treatment
+y0 <- plogis(-0.3 + 0.4 * rct$motivation)          # potential outcome under control
+
+naive_est <- mean(y1[bonus_obs == 1]) - mean(y0[bonus_obs == 0])
+att <- mean(y1[bonus_obs == 1] - y0[bonus_obs == 1])
+sel_bias <- mean(y0[bonus_obs == 1]) - mean(y0[bonus_obs == 0])
+
+tibble(
+  Component = c("Naive estimate", "= ATT", "+ Selection bias"),
+  Value = c(naive_est, att, sel_bias)
+) |>
+  knitr::kable(digits = 3)
+```
+]
+
+.pull-right[
+- **ATT** = the real causal effect on treated drivers
+- **Selection bias** = treated drivers had higher $Y(0)$ (they would have retained more even without the bonus)
+- **Naive** = ATT + bias → overstates the effect
+]
+
+---
+
+# ATE vs ATT vs ATU: When It Matters
+
+```{r ate-att, echo=FALSE, fig.height=3.5}
+# Heterogeneous effects: high-motivation drivers benefit less
+rct_het <- tibble(
+  motivation = rnorm(n),
+  effect = 0.6 - 0.3 * motivation,  # less motivated benefit more
+  y0 = plogis(-0.3 + 0.4 * motivation),
+  y1 = plogis(-0.3 + 0.4 * motivation + effect),
+  tau = y1 - y0,
+  got_bonus = rbinom(n, 1, prob = plogis(0.8 * motivation))
+)
+
+tibble(
+  Estimand = c("ATE", "ATT", "ATU"),
+  Value = c(mean(rct_het$tau),
+            mean(rct_het$tau[rct_het$got_bonus == 1]),
+            mean(rct_het$tau[rct_het$got_bonus == 0]))
+) |>
+  ggplot(aes(Estimand, Value, fill = Estimand)) +
+  geom_col(show.legend = FALSE, width = 0.5) +
+  geom_text(aes(label = round(Value, 3)), vjust = -0.5, size = 5) +
+  scale_fill_manual(values = c("steelblue", "firebrick", "grey60")) +
+  labs(title = "ATE, ATT, and ATU can differ substantially",
+       subtitle = "Here: less motivated drivers benefit more, but motivated drivers seek the bonus",
+       y = "Average treatment effect") +
+  ylim(0, 0.15)
+```
+
+**Interview question:** "We ran an experiment and found a 5% lift. Should we roll out to everyone?" The answer depends on whether the experimental effect (≈ ATE) equals the effect on the marginal users who would adopt (≈ ATU).
+
+---
+
+# SUTVA: A Preview
+
+Everything so far assumed:
+
+1. **No interference:** Alice's bonus doesn't affect Bob's retention
+2. **No hidden versions:** the bonus is the same for everyone
+
+--
+
+.highlight-box[
+In marketplace experiments, **both assumptions are routinely violated:**
+- Giving bonuses to some drivers changes the market for all drivers (more supply → fewer rides per driver)
+- The "same" bonus might be worth different amounts in different cities
+]
+
+--
+
+This is Module 2's topic — and it's what tech interviewers care about most. The experimental ideal from this module is the *starting point*, not the ending point.
+
+---
+
+# Key Takeaways
+
+1. **Potential outcomes** define the causal effect: $\tau_i = Y_i(1) - Y_i(0)$. We can never observe both.
+
+2. The naive comparison = **ATT + selection bias**. Selection bias = pre-existing differences between groups.
+
+3. **Randomization** makes treatment independent of potential outcomes → kills selection bias → simple difference in means is unbiased for ATE.
+
+4. Randomization works **in expectation**, not in every sample. Inference handles the sampling variation.
+
+5. **ATE ≠ ATT ≠ ATU** when effects are heterogeneous and treatment is correlated with the effect. Always ask "for whom?"
+
+6. **SUTVA** (no interference, no hidden versions) is assumed throughout — and almost always violated in tech. That's next.
+
+---
+
+# Exercise Preview
+
+In the exercise you will:
+
+1. Simulate potential outcomes for 1,000 drivers with heterogeneous effects
+2. Show that the naive comparison is biased (reproduce the decomposition)
+3. Show that randomization eliminates bias in expectation (1,000 simulated RCTs)
+4. Compute ATE, ATT, ATU and show when they diverge
+5. Break SUTVA in a simple simulation and see what happens to the estimate
+
+See `exercise.R` for the starter code.
+
+---
+class: center, middle, inverse
+
+# Backup Slides
+
+---
+name: selection-proof
+
+# Backup: Deriving the Selection Bias Decomposition
+
+Start with the naive estimand (difference in observed conditional means):
+
+$$E[Y \mid D=1] - E[Y \mid D=0]$$
+
+--
+
+Since $Y = D \cdot Y(1) + (1-D) \cdot Y(0)$, the treated group shows $Y(1)$ and the control group shows $Y(0)$:
+
+$$= E[Y(1) \mid D=1] - E[Y(0) \mid D=0]$$
+
+--
+
+Add and subtract $E[Y(0) \mid D=1]$:
+
+$$= \underbrace{E[Y(1) \mid D=1] - E[Y(0) \mid D=1]}_{\text{ATT}} + \underbrace{E[Y(0) \mid D=1] - E[Y(0) \mid D=0]}_{\text{selection bias}}$$
+
+--
+
+Under randomization, $E[Y(0) \mid D=1] = E[Y(0) \mid D=0]$, so selection bias = 0 and ATT = ATE.

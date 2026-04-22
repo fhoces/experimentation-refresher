@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Module 1: The Experimental Ideal</title>
+    <meta charset="utf-8" />
+    <script src="slides_files/header-attrs-2.29/header-attrs.js"></script>
+    <link href="slides_files/remark-css-0.0.1/default.css" rel="stylesheet" />
+    <link href="slides_files/remark-css-0.0.1/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+.title[
+# Module 1: The Experimental Ideal
+]
+.subtitle[
+## Potential Outcomes, Selection Bias, and Why Randomization Works
+]
+
+---
+
+
+&lt;style type="text/css"&gt;
+.remark-code, .remark-inline-code { font-size: 80%; }
+.remark-slide-content { padding: 1em 2em; }
+.small { font-size: 80%; }
+.tiny { font-size: 65%; }
+.highlight-box {
+  background: #fff3e0;
+  border-left: 4px solid #e65100;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+.blue-box {
+  background: #e3f2fd;
+  border-left: 4px solid #1565c0;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+&lt;/style&gt;
+
+
+
+# Course Map
+
+&lt;table&gt;
+&lt;tr&gt;&lt;th&gt;#&lt;/th&gt;&lt;th&gt;Module&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;b&gt;1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;&lt;b&gt;The Experimental Ideal&lt;/b&gt; &lt;i&gt;(you are here)&lt;/i&gt;&lt;/td&gt;&lt;td&gt;current&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;2&lt;/td&gt;&lt;td&gt;SUTVA and When It Breaks&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;3&lt;/td&gt;&lt;td&gt;Designing Around Interference&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;4&lt;/td&gt;&lt;td&gt;Power and Sample Size&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;5&lt;/td&gt;&lt;td&gt;Analyzing Experiments&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;6&lt;/td&gt;&lt;td&gt;Multiple Testing &amp; Subgroups&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;7&lt;/td&gt;&lt;td&gt;External Validity&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;8&lt;/td&gt;&lt;td&gt;Advanced Topics&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+
+---
+
+# The Setup: A Driver Bonus Experiment
+
+A ride-sharing platform wants to know: **does offering a $500 sign-on bonus increase driver retention at 6 months?**
+
+--
+
+The product team looks at the data:
+
+
+|Group     |   N| Retention rate|
+|:---------|---:|--------------:|
+|No bonus  | 494|          0.427|
+|Got bonus | 506|          0.514|
+
+--
+
+"The bonus increases retention by ~15 percentage points! Ship it!"
+
+...or does it?
+
+---
+
+# The Fundamental Problem
+
+We want to know the **causal effect** of the bonus on retention for each driver `\(i\)`:
+
+`$$\tau_i = Y_i(1) - Y_i(0)$$`
+
+--
+
+| Driver | `\(Y_i(1)\)` (with bonus) | `\(Y_i(0)\)` (without) | Effect |
+|--------|----------------------|---------------------|--------|
+| Alice  | 1 (retained)         | ?                   | ?      |
+| Bob    | ?                    | 0 (churned)         | ?      |
+| Carol  | 1 (retained)         | ?                   | ?      |
+| Dave   | ?                    | 1 (retained)        | ?      |
+
+--
+
+We only observe **one** potential outcome per driver. The other is the *counterfactual* — it doesn't exist in the data. We can never compute `\(\tau_i\)` directly.
+
+---
+
+# What We *Can* Estimate: Average Effects
+
+Even though individual effects are unobservable, we can estimate **averages**:
+
+--
+
+- **ATE** = `\(E[Y_i(1) - Y_i(0)]\)` — average effect across *everyone*
+
+--
+
+- **ATT** = `\(E[Y_i(1) - Y_i(0) \mid D_i = 1]\)` — average effect on those who *got* treatment
+
+--
+
+- **ATU** = `\(E[Y_i(1) - Y_i(0) \mid D_i = 0]\)` — average effect on the *untreated*
+
+--
+
+.highlight-box[
+**When do these differ?** When (1) treatment effects are heterogeneous AND (2) who gets treated is correlated with the effect. Example: if motivated drivers both seek the bonus AND benefit more from it, then ATT &gt; ATE &gt; ATU.
+]
+
+---
+
+# Selection Bias: The Decomposition
+
+The naive comparison — difference in observed means — is:
+
+`$$E[Y_i \mid D_i = 1] - E[Y_i \mid D_i = 0]$$`
+
+--
+
+This equals:
+
+`$$= \underbrace{E[Y_i(1) - Y_i(0) \mid D_i = 1]}_{\text{ATT}} + \underbrace{E[Y_i(0) \mid D_i = 1] - E[Y_i(0) \mid D_i = 0]}_{\text{selection bias}}$$`
+
+--
+
+.highlight-box[
+**Selection bias** = the difference in *baseline* outcomes between the groups. Drivers who sought out the bonus were more motivated → they would have had higher retention *even without the bonus*.
+]
+
+---
+
+# Selection Bias: Visualized
+
+&lt;img src="slides_files/figure-html/selection-bias-viz-1.png" style="display: block; margin: auto;" /&gt;
+
+The bonus group has higher motivation on average → higher retention *regardless of the bonus*. The naive estimate conflates the bonus effect with pre-existing differences.
+
+---
+
+# Randomization: The Fix
+
+Randomly assign 500 drivers to bonus, 500 to control:
+
+
+```r
+n &lt;- 1000
+rct &lt;- tibble(
+  driver_id = 1:n,
+  motivation = rnorm(n),
+  # Random assignment — independent of motivation
+  bonus = sample(rep(c(0, 1), each = n/2)),
+  # True effect of bonus = 10pp (0.4 on logit scale)
+  retained = rbinom(n, 1, prob = plogis(-0.3 + 0.4 * motivation +
+                                          0.4 * bonus))
+)
+```
+
+--
+
+
+|Group   |   N| Mean motivation| Retention|
+|:-------|---:|---------------:|---------:|
+|Control | 500|           0.071|     0.408|
+|Bonus   | 500|          -0.077|     0.522|
+
+Motivation is balanced (by construction). The difference in retention is an unbiased estimate of the ATE.
+
+---
+
+# Why Does Randomization Work?
+
+Random assignment makes treatment independent of potential outcomes:
+
+`$$(Y_i(1), Y_i(0)) \perp D_i$$`
+
+--
+
+This kills selection bias:
+
+`$$E[Y_i(0) \mid D_i = 1] = E[Y_i(0) \mid D_i = 0]$$`
+
+--
+
+So the simple difference in means equals the ATE:
+
+`$$E[Y \mid D=1] - E[Y \mid D=0] = E[Y(1)] - E[Y(0)] = \text{ATE}$$`
+
+--
+
+.blue-box[
+**But:** randomization guarantees this *in expectation*, not in every sample. Any given experiment can have imbalanced covariates by chance. That's what inference (confidence intervals, p-values) is for.
+]
+
+---
+
+# Simulation: Randomization Works in Expectation
+
+&lt;img src="slides_files/figure-html/sim-many-rcts-1.png" style="display: block; margin: auto;" /&gt;
+
+---
+
+# The Naive Estimate Is Biased
+
+&lt;img src="slides_files/figure-html/sim-naive-1.png" style="display: block; margin: auto;" /&gt;
+
+The naive distribution is shifted right — it **overestimates** the effect because motivated drivers both seek the bonus and retain more.
+
+---
+
+# Numerical Decomposition
+
+.pull-left[
+
+|Component        | Value|
+|:----------------|-----:|
+|Naive estimate   | 0.154|
+|= ATT            | 0.096|
+|+ Selection bias | 0.058|
+]
+
+.pull-right[
+- **ATT** = the real causal effect on treated drivers
+- **Selection bias** = treated drivers had higher `\(Y(0)\)` (they would have retained more even without the bonus)
+- **Naive** = ATT + bias → overstates the effect
+]
+
+---
+
+# ATE vs ATT vs ATU: When It Matters
+
+&lt;img src="slides_files/figure-html/ate-att-1.png" style="display: block; margin: auto;" /&gt;
+
+**Interview question:** "We ran an experiment and found a 5% lift. Should we roll out to everyone?" The answer depends on whether the experimental effect (≈ ATE) equals the effect on the marginal users who would adopt (≈ ATU).
+
+---
+
+# SUTVA: A Preview
+
+Everything so far assumed:
+
+1. **No interference:** Alice's bonus doesn't affect Bob's retention
+2. **No hidden versions:** the bonus is the same for everyone
+
+--
+
+.highlight-box[
+In marketplace experiments, **both assumptions are routinely violated:**
+- Giving bonuses to some drivers changes the market for all drivers (more supply → fewer rides per driver)
+- The "same" bonus might be worth different amounts in different cities
+]
+
+--
+
+This is Module 2's topic — and it's what tech interviewers care about most. The experimental ideal from this module is the *starting point*, not the ending point.
+
+---
+
+# Key Takeaways
+
+1. **Potential outcomes** define the causal effect: `\(\tau_i = Y_i(1) - Y_i(0)\)`. We can never observe both.
+
+2. The naive comparison = **ATT + selection bias**. Selection bias = pre-existing differences between groups.
+
+3. **Randomization** makes treatment independent of potential outcomes → kills selection bias → simple difference in means is unbiased for ATE.
+
+4. Randomization works **in expectation**, not in every sample. Inference handles the sampling variation.
+
+5. **ATE ≠ ATT ≠ ATU** when effects are heterogeneous and treatment is correlated with the effect. Always ask "for whom?"
+
+6. **SUTVA** (no interference, no hidden versions) is assumed throughout — and almost always violated in tech. That's next.
+
+---
+
+# Exercise Preview
+
+In the exercise you will:
+
+1. Simulate potential outcomes for 1,000 drivers with heterogeneous effects
+2. Show that the naive comparison is biased (reproduce the decomposition)
+3. Show that randomization eliminates bias in expectation (1,000 simulated RCTs)
+4. Compute ATE, ATT, ATU and show when they diverge
+5. Break SUTVA in a simple simulation and see what happens to the estimate
+
+See `exercise.R` for the starter code.
+
+---
+class: center, middle, inverse
+
+# Backup Slides
+
+---
+name: selection-proof
+
+# Backup: Deriving the Selection Bias Decomposition
+
+Start with the naive estimand (difference in observed conditional means):
+
+`$$E[Y \mid D=1] - E[Y \mid D=0]$$`
+
+--
+
+Since `\(Y = D \cdot Y(1) + (1-D) \cdot Y(0)\)`, the treated group shows `\(Y(1)\)` and the control group shows `\(Y(0)\)`:
+
+`$$= E[Y(1) \mid D=1] - E[Y(0) \mid D=0]$$`
+
+--
+
+Add and subtract `\(E[Y(0) \mid D=1]\)`:
+
+`$$= \underbrace{E[Y(1) \mid D=1] - E[Y(0) \mid D=1]}_{\text{ATT}} + \underbrace{E[Y(0) \mid D=1] - E[Y(0) \mid D=0]}_{\text{selection bias}}$$`
+
+--
+
+Under randomization, `\(E[Y(0) \mid D=1] = E[Y(0) \mid D=0]\)`, so selection bias = 0 and ATT = ATE.
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false,
+"ratio": "16:9"
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+// add `data-at-shortcutkeys` attribute to <body> to resolve conflicts with JAWS
+// screen reader (see PR #262)
+(function(d) {
+  let res = {};
+  d.querySelectorAll('.remark-help-content table tr').forEach(tr => {
+    const t = tr.querySelector('td:nth-child(2)').innerText;
+    tr.querySelectorAll('td:first-child .key').forEach(key => {
+      const k = key.innerText;
+      if (/^[a-z]$/.test(k)) res[k] = t;  // must be a single letter (key)
+    });
+  });
+  d.body.setAttribute('data-at-shortcutkeys', JSON.stringify(res));
+})(document);
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
