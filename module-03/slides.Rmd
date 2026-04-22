@@ -1,0 +1,803 @@
+---
+title: "Module 3: Designing Around Interference"
+subtitle: "Cluster Randomization, Switchbacks, and the Bias-Variance Tradeoff"
+output:
+  xaringan::moon_reader:
+    css: [default, default-fonts]
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+      ratio: "16:9"
+---
+
+```{css, echo=FALSE}
+.remark-code, .remark-inline-code { font-size: 80%; }
+.remark-slide-content { padding: 1em 2em; }
+.small { font-size: 80%; }
+.tiny { font-size: 65%; }
+.highlight-box {
+  background: #fff3e0;
+  border-left: 4px solid #e65100;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+.blue-box {
+  background: #e3f2fd;
+  border-left: 4px solid #1565c0;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, fig.align = "center",
+  fig.width = 10, fig.height = 4.2, dpi = 150,
+  message = FALSE, warning = FALSE
+)
+library(tidyverse)
+theme_set(theme_minimal(base_size = 14))
+set.seed(42)
+```
+
+# Course Map
+
+<table>
+<tr><th>#</th><th>Module</th><th>Status</th></tr>
+<tr><td>1</td><td>The Experimental Ideal</td><td>done</td></tr>
+<tr><td>2</td><td>SUTVA and When It Breaks</td><td>done</td></tr>
+<tr><td><b>3</b></td><td><b>Designing Around Interference</b> <i>(you are here)</i></td><td>current</td></tr>
+<tr><td>4</td><td>Power and Sample Size</td><td>upcoming</td></tr>
+<tr><td>5</td><td>Analyzing Experiments</td><td>upcoming</td></tr>
+<tr><td>6</td><td>Multiple Testing & Subgroups</td><td>upcoming</td></tr>
+<tr><td>7</td><td>External Validity</td><td>upcoming</td></tr>
+<tr><td>8</td><td>Advanced Topics</td><td>upcoming</td></tr>
+</table>
+
+---
+
+# Last Time: SUTVA Breaks Everywhere
+
+Module 2 showed that interference biases the naive ATE:
+
+- **Marketplace:** bonus drivers take rides from control drivers (overestimates effect)
+- **Networks:** treated co-authors spill over to control studies (underestimates effect)
+- **General equilibrium:** small experiment $\neq$ full rollout
+
+--
+
+Today: **how to design experiments that work despite interference.**
+
+The core idea is simple: randomize at a level where interference is contained.
+
+--
+
+.highlight-box[
+Every design in this module trades **bias** (from interference) for **variance** (from fewer independent units). The art is finding the sweet spot.
+]
+
+---
+
+# The Setup: 40 Cities, 50 Drivers Each
+
+```{r setup-market, echo=FALSE}
+n_cities <- 40
+drivers_per_city <- 50
+n_total <- n_cities * drivers_per_city
+
+market <- tibble(
+  driver_id = 1:n_total,
+  city_id = rep(1:n_cities, each = drivers_per_city),
+  skill = rnorm(n_total),
+  city_effect = rep(rnorm(n_cities, 0, 0.3), each = drivers_per_city)
+)
+
+true_ate <- mean(
+  plogis(-0.5 + 0.3 * market$skill + market$city_effect + 0.5) -
+  plogis(-0.5 + 0.3 * market$skill + market$city_effect)
+)
+```
+
+A ride-sharing platform operates in **40 cities** with **50 drivers each** (2,000 total). They want to test a driver bonus.
+
+--
+
+**The problem:** within each city, interference is strong. Bonus drivers take rides from non-bonus drivers.
+
+--
+
+**Design options:**
+
+| Design | Unit of randomization | Independent units |
+|--------|----------------------|-------------------|
+| Individual | Driver | 2,000 (but biased) |
+| City cluster | City | 40 (unbiased within city) |
+| Region cluster | 5-city region | 8 (less bias, more variance) |
+
+---
+
+# Individual vs Cluster: Side by Side
+
+```{r indiv-vs-cluster, echo=FALSE, fig.height=4}
+interference <- 0.3
+
+sim_individual <- function() {
+  d <- market |> mutate(bonus = sample(rep(c(0, 1), each = n() / 2)))
+  d <- d |>
+    group_by(city_id) |>
+    mutate(frac_t = mean(bonus),
+           interf = -interference * frac_t * (1 - bonus)) |>
+    ungroup() |>
+    mutate(y = rbinom(n(), 1, prob = plogis(-0.5 + 0.3 * skill +
+                                              city_effect + 0.5 * bonus + interf)))
+  mean(d$y[d$bonus == 1]) - mean(d$y[d$bonus == 0])
+}
+
+sim_cluster <- function() {
+  arms <- tibble(city_id = 1:n_cities,
+                 bonus = sample(rep(c(0, 1), each = n_cities / 2)))
+  d <- market |> left_join(arms, by = "city_id") |>
+    mutate(y = rbinom(n(), 1, prob = plogis(-0.5 + 0.3 * skill +
+                                              city_effect + 0.5 * bonus)))
+  mean(d$y[d$bonus == 1]) - mean(d$y[d$bonus == 0])
+}
+
+indiv_ests <- replicate(1000, sim_individual())
+cluster_ests <- replicate(1000, sim_cluster())
+
+bind_rows(
+  tibble(est = indiv_ests, design = "Individual (biased, low variance)"),
+  tibble(est = cluster_ests, design = "City cluster (unbiased, high variance)")
+) |>
+  ggplot(aes(est, fill = design)) +
+  geom_histogram(bins = 40, alpha = 0.6, position = "identity") +
+  geom_vline(xintercept = true_ate, color = "firebrick",
+             linewidth = 1.2, linetype = "dashed") +
+  annotate("text", x = true_ate - 0.005, y = 70,
+           label = paste("True ATE =", round(true_ate, 3)),
+           color = "firebrick", hjust = 1, size = 4) +
+  scale_fill_manual(values = c("steelblue", "darkorange")) +
+  labs(title = "Individual vs cluster randomization: bias-variance tradeoff",
+       x = "Estimated ATE", y = "Count") +
+  theme(legend.position = "top")
+```
+
+---
+
+# Why Clustering Eliminates Bias
+
+.pull-left[
+**Individual randomization:**
+- Within each city, ~50% treated, ~50% control
+- Treated drivers take rides from control drivers
+- Control retention **drops** due to interference
+- Naive ATE = direct effect + interference bias
+
+**City-level clustering:**
+- Each city is 100% treated or 100% control
+- No within-city interference (everyone has the same status)
+- Between-city interference is small (drivers don't cross cities)
+- ATE is unbiased
+]
+
+.pull-right[
+```{r cluster-logic, echo=FALSE, fig.height=5}
+tibble(
+  Design = rep(c("Individual", "Cluster"), each = 2),
+  Group = rep(c("Control", "Treated"), 2),
+  `Within-city interference` = c("Yes (harmed)", "No effect",
+                                  "None", "None"),
+  Outcome = c("Biased down", "Correct", "Correct", "Correct")
+) |>
+  knitr::kable(align = "llll")
+```
+
+.highlight-box[
+**Intuition:** clustering works because interference happens *within* clusters. If you randomize the whole cluster, there's no one to interfere with.
+]
+]
+
+---
+
+# But Clustering Costs You Power
+
+```{r power-cost, echo=FALSE, fig.height=3.8}
+tibble(
+  Design = c("Individual\n(2,000 units)", "City cluster\n(40 units)",
+             "Region cluster\n(8 units)"),
+  `Effective N` = c(2000, 40, 8),
+  order = c(1, 2, 3)
+) |>
+  ggplot(aes(reorder(Design, order), `Effective N`)) +
+  geom_col(fill = "steelblue", width = 0.5) +
+  geom_text(aes(label = `Effective N`), vjust = -0.5, size = 5) +
+  labs(title = "Clustering reduces effective sample size dramatically",
+       subtitle = "From 2,000 independent units to 40 (or 8) clusters",
+       x = "", y = "Number of independent units") +
+  ylim(0, 2200)
+```
+
+.highlight-box[
+**The bias-variance tradeoff:** individual randomization is biased but precise. Cluster randomization is unbiased but noisy. You need to choose the right level.
+]
+
+---
+
+# Design Effect and ICC
+
+The **design effect** quantifies the power loss from clustering:
+
+$$n_{eff} = \frac{n}{1 + (m - 1) \cdot \rho}$$
+
+where $m$ = cluster size and $\rho$ = intra-cluster correlation (ICC).
+
+--
+
+```{r icc-table, echo=FALSE}
+expand_grid(
+  m = c(10, 50, 200),
+  rho = c(0.01, 0.05, 0.10, 0.20)
+) |>
+  mutate(
+    design_effect = 1 + (m - 1) * rho,
+    n_eff_per_10000 = round(10000 / design_effect),
+    pct_lost = paste0(round(100 * (1 - 1/design_effect)), "%")
+  ) |>
+  select(`Cluster size (m)` = m, `ICC (rho)` = rho,
+         `Design effect` = design_effect,
+         `Eff. N (of 10,000)` = n_eff_per_10000,
+         `% power lost` = pct_lost) |>
+  knitr::kable(digits = 1, align = "rrrrr")
+```
+
+--
+
+.highlight-box[
+Even moderate ICC (0.05) with medium clusters (50) loses ~70% of effective sample size. This is why cluster experiments need many more total observations.
+]
+
+<a href="#icc-derivation" style="position:absolute; bottom:12px; left:40px; font-size:11px; background:#e8eaf6; padding:2px 8px; border-radius:3px; z-index:100;">ICC derivation</a>
+
+---
+
+# The Bias-Variance Tradeoff: Simulated
+
+```{r tradeoff-sim, echo=FALSE, fig.height=3.8}
+sim_varying <- function(n_clusters) {
+  cities_per <- n_cities / n_clusters
+  arms <- tibble(cluster_id = 1:n_clusters,
+                 bonus = sample(rep(c(0, 1), each = n_clusters / 2)))
+  d <- market |>
+    mutate(cluster_id = ceiling(city_id / cities_per)) |>
+    left_join(arms, by = "cluster_id") |>
+    group_by(cluster_id) |>
+    mutate(interf = -interference * (1 - mean(bonus)) *
+             (1 - bonus) * (n_clusters / n_cities)) |>
+    ungroup() |>
+    mutate(y = rbinom(n(), 1, prob = plogis(-0.5 + 0.3 * skill +
+                                              city_effect + 0.5 * bonus + interf)))
+  mean(d$y[d$bonus == 1]) - mean(d$y[d$bonus == 0])
+}
+
+cluster_sizes <- c(40, 20, 10, 8, 4, 2)
+tradeoff <- map_dfr(cluster_sizes, function(nc) {
+  ests <- replicate(500, sim_varying(nc))
+  tibble(n_clusters = nc, cities_per = n_cities / nc,
+         bias = abs(mean(ests) - true_ate),
+         sd = sd(ests),
+         rmse = sqrt(mean((ests - true_ate)^2)))
+})
+
+tradeoff |>
+  pivot_longer(c(bias, sd, rmse), names_to = "metric", values_to = "value") |>
+  mutate(metric = factor(metric, levels = c("bias", "sd", "rmse"),
+                         labels = c("|Bias|", "Std Dev", "RMSE"))) |>
+  ggplot(aes(cities_per, value, color = metric)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("firebrick", "steelblue", "grey40")) +
+  labs(title = "Bias-variance tradeoff as cluster size varies",
+       subtitle = "RMSE is minimized at an intermediate cluster size",
+       x = "Cities per cluster", y = "Value", color = "") +
+  theme(legend.position = "top")
+```
+
+.highlight-box[
+**RMSE** = $\sqrt{\text{bias}^2 + \text{variance}}$. The optimal cluster size minimizes RMSE, balancing the two forces.
+]
+
+---
+
+# Switchback Designs
+
+An alternative to spatial clustering: **randomize over time**.
+
+--
+
+.pull-left[
+**How it works:**
+1. Divide time into periods (e.g., 2-hour blocks)
+2. Each period, randomize each city to treatment or control
+3. Compare outcomes in treated vs. control periods
+4. Every city serves as its own control (removes city fixed effects)
+]
+
+--
+
+.pull-right[
+```{r switchback-diagram, echo=FALSE, fig.height=4}
+set.seed(123)
+sb <- expand_grid(city = paste("City", 1:6), period = 1:12) |>
+  mutate(treated = sample(c(0, 1), n(), replace = TRUE))
+
+ggplot(sb, aes(period, city, fill = factor(treated))) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  scale_fill_manual(values = c("grey80", "steelblue"),
+                    labels = c("Control", "Treated")) +
+  scale_x_continuous(breaks = 1:12) +
+  labs(title = "Switchback design: 6 cities x 12 periods",
+       x = "Time period", y = "", fill = "") +
+  theme(legend.position = "top", panel.grid = element_blank())
+```
+]
+
+---
+
+# Switchback: Strengths and Risks
+
+**Strengths:**
+- Every unit (city) appears in both arms over time -- removes unit-level confounders
+- More "independent observations" than pure cluster randomization
+- Natural for marketplace experiments where interference is spatial, not temporal
+
+--
+
+**Risks:**
+
+```{r carryover, echo=FALSE, fig.height=2.8}
+tibble(
+  period = 1:10,
+  treatment = c(1, 1, 0, 0, 1, 0, 1, 1, 0, 0),
+  true_outcome = c(0.6, 0.65, 0.4, 0.42, 0.62, 0.41, 0.61, 0.64, 0.40, 0.41),
+  with_carryover = c(0.6, 0.65, 0.48, 0.43, 0.62, 0.47, 0.61, 0.64, 0.48, 0.42)
+) |>
+  pivot_longer(c(true_outcome, with_carryover), names_to = "type", values_to = "y") |>
+  mutate(type = if_else(type == "true_outcome", "No carryover", "With carryover")) |>
+  ggplot(aes(period, y, color = type)) +
+  geom_line(linewidth = 1) + geom_point(size = 2) +
+  geom_tile(data = tibble(period = 1:10,
+                          treatment = c(1,1,0,0,1,0,1,1,0,0)),
+            aes(period, y = 0.35, fill = factor(treatment)),
+            height = 0.03, inherit.aes = FALSE, alpha = 0.5) +
+  scale_color_manual(values = c("steelblue", "darkorange")) +
+  scale_fill_manual(values = c("grey80", "steelblue"), guide = "none") +
+  labs(title = "Carryover effect: treatment bleeds into control periods",
+       x = "Period", y = "Outcome", color = "") +
+  theme(legend.position = "top")
+```
+
+.highlight-box[
+**Carryover** = treatment in period $t$ affects outcomes in period $t+1$, even if $t+1$ is assigned to control. Fix: add "washout" or "burn-in" periods between switches. Cost: fewer usable periods.
+]
+
+---
+
+# Switchback: Simulation
+
+```{r switchback-sim, echo=FALSE, fig.height=3.8}
+sim_switchback <- function(carryover = 0) {
+  n_periods <- 20; n_sw_cities <- 10
+  design <- expand_grid(city_id = 1:n_sw_cities, period = 1:n_periods) |>
+    mutate(bonus = sample(c(0, 1), n(), replace = TRUE),
+           city_effect = rep(rnorm(n_sw_cities, 0, 0.3), times = n_periods),
+           period_effect = rep(rnorm(n_periods, 0, 0.1), each = n_sw_cities))
+  design <- design |>
+    group_by(city_id) |>
+    mutate(prev = lag(bonus, default = 0),
+           carry = carryover * prev) |>
+    ungroup() |>
+    mutate(y = if_else(bonus == 1,
+                       plogis(-0.5 + city_effect + period_effect + 0.5),
+                       plogis(-0.5 + city_effect + period_effect)) +
+             carry + rnorm(n(), 0, 0.03))
+  mean(design$y[design$bonus == 1]) - mean(design$y[design$bonus == 0])
+}
+
+sb0 <- replicate(500, sim_switchback(0))
+sb1 <- replicate(500, sim_switchback(0.05))
+
+bind_rows(
+  tibble(est = sb0, scenario = "No carryover"),
+  tibble(est = sb1, scenario = "Carryover = 0.05")
+) |>
+  ggplot(aes(est, fill = scenario)) +
+  geom_histogram(bins = 35, alpha = 0.6, position = "identity") +
+  geom_vline(xintercept = mean(sb0), color = "firebrick",
+             linewidth = 1, linetype = "dashed") +
+  scale_fill_manual(values = c("steelblue", "darkorange")) +
+  labs(title = "Switchback estimates: carryover creates upward bias",
+       subtitle = "Control periods contaminated by prior treatment -> overestimates effect",
+       x = "Estimated ATE", y = "Count") +
+  theme(legend.position = "top")
+```
+
+---
+
+# Two-Sided Marketplace Designs
+
+In a ride-sharing experiment, you can randomize **riders** instead of **drivers**:
+
+--
+
+.pull-left[
+**Randomize riders:**
+- 50% of riders see new pricing
+- 50% see old pricing
+- Riders don't interact with each other (mostly)
+- No interference on the randomization side
+
+**Measure driver outcomes:**
+- Driver earnings, wait times, retention
+- These reflect the equilibrium effect
+]
+
+--
+
+.pull-right[
+**Why it works:**
+- Each rider's experience is independent (they don't share rides)
+- But their collective demand changes driver supply allocation
+- You get the direct effect on riders AND the indirect effect on drivers
+
+**When it doesn't work:**
+- If treated riders change market-wide conditions (e.g., surge pricing triggers)
+- If the treatment fraction is large enough to move equilibrium prices
+]
+
+---
+
+# Geo Experiments
+
+For online advertising and pricing experiments, **geographic units** are natural clusters:
+
+--
+
+```{r geo-diagram, echo=FALSE, fig.height=3.5}
+set.seed(42)
+geos <- tibble(
+  dma = paste("DMA", 1:20),
+  treated = sample(rep(c(0, 1), each = 10)),
+  baseline = runif(20, 1000, 5000),
+  lift = if_else(treated == 1, 0.05, 0),
+  revenue = baseline * (1 + lift) + rnorm(20, 0, 100)
+)
+
+ggplot(geos, aes(reorder(dma, revenue), revenue,
+                 fill = factor(treated))) +
+  geom_col(width = 0.7) +
+  scale_fill_manual(values = c("grey70", "steelblue"),
+                    labels = c("Control", "Treated")) +
+  coord_flip() +
+  labs(title = "Geo experiment: 20 DMAs, 10 treated, 10 control",
+       subtitle = "Each DMA is an independent unit. High variance between DMAs.",
+       x = "", y = "Revenue ($)", fill = "") +
+  theme(legend.position = "top")
+```
+
+--
+
+.blue-box[
+**Google/Meta approach:** "GeoX" or "geo-based incrementality." Randomize ad spend across 50-200 DMAs. Estimate lift at the DMA level. Power depends on between-DMA variance and number of DMAs, not number of users.
+]
+
+---
+
+# Ego-Cluster Randomization for Networks
+
+For **network interference** (social media, academic co-authorship), standard clustering is hard because network boundaries are unclear.
+
+--
+
+**Ego-cluster approach:**
+1. Pick a focal unit (ego)
+2. Define the cluster as ego + all immediate neighbors (alter set)
+3. Randomize the **entire cluster** to the same arm
+4. Interference within the cluster is absorbed
+
+--
+
+```{r ego-cluster, echo=FALSE, fig.height=3}
+# Simple network visualization
+set.seed(42)
+nodes <- tibble(
+  id = 1:12,
+  x = c(0, 1, 2, 0.5, 1.5, 4, 5, 6, 4.5, 5.5, 3, 3.5),
+  y = c(1, 2, 1, 0, 0, 1, 2, 1, 0, 0, 1.5, 0.5),
+  cluster = c(rep("Cluster A (treated)", 5), rep("Cluster B (control)", 5),
+              rep("Between", 2))
+)
+edges <- tibble(
+  from = c(1,1,2,2,3,4,5, 6,6,7,7,8,9,10, 3,11,11,12),
+  to =   c(2,4,3,5,5,5,3, 7,9,8,10,10,10,8, 11,12,6,9)
+)
+
+edge_df <- edges |>
+  left_join(nodes |> select(id, x, y), by = c("from" = "id")) |>
+  rename(x_from = x, y_from = y) |>
+  left_join(nodes |> select(id, x, y), by = c("to" = "id")) |>
+  rename(x_to = x, y_to = y)
+
+ggplot() +
+  geom_segment(data = edge_df, aes(x = x_from, y = y_from,
+                                    xend = x_to, yend = y_to),
+               color = "grey70", linewidth = 0.5) +
+  geom_point(data = nodes, aes(x, y, color = cluster), size = 6) +
+  geom_text(data = nodes, aes(x, y, label = id), size = 3, color = "white") +
+  scale_color_manual(values = c("grey50", "steelblue", "darkorange")) +
+  labs(title = "Ego-cluster randomization: entire cluster gets same arm",
+       subtitle = "Nodes 11-12 bridge the clusters -- between-cluster spillover is the residual risk",
+       color = "") +
+  theme_void(base_size = 13) + theme(legend.position = "top")
+```
+
+---
+
+# Application: City-Level Pricing Experiment
+
+A ride-sharing company wants to test a new **surge pricing algorithm**.
+
+--
+
+.pull-left[
+**Why cluster at the city level?**
+- Surge pricing affects ALL riders and drivers in a city
+- If 50% of riders see new surge and 50% see old, drivers face inconsistent signals
+- City-level randomization: each city gets one algorithm
+- No within-city interference
+]
+
+--
+
+.pull-right[
+**The power problem:**
+- Only 40 cities available
+- 20 treatment, 20 control
+- ICC of driver outcomes within cities $\approx 0.08$
+- Effective $N \approx 40$ (not 2,000)
+- Need a **large** effect to detect anything
+]
+
+--
+
+.highlight-box[
+**The interview question:** "We have 40 cities. Can we run a cluster-randomized experiment?" Answer: probably, but only if the expected effect is large. Calculate the minimum detectable effect (MDE) and check if it's business-relevant.
+]
+
+---
+
+# Application: Switchback for Surge Pricing
+
+**Alternative:** use a switchback design within each city.
+
+--
+
+- Divide each day into 2-hour blocks
+- Randomize which blocks use the new vs. old surge algorithm
+- 12 blocks/day x 30 days x 40 cities = 14,400 city-period cells
+- Effective N is much larger than 40 clusters
+
+--
+
+**But:**
+- Carryover: if new surge drives drivers away, the next control period starts with fewer drivers
+- Need washout periods (waste time and data)
+- Confounding with time-of-day effects (surge matters more at peak times)
+
+--
+
+.blue-box[
+**Practical design:** stratified switchback. Within each city, pair "similar" time blocks (e.g., Monday 5-7pm with Wednesday 5-7pm) and randomize within pairs. This controls for time-of-day and day-of-week effects.
+]
+
+---
+
+# Application: Geo Incrementality for Online Ads
+
+An e-commerce company wants to measure whether their TV ad campaign drives sales.
+
+--
+
+**Design:**
+- 100 DMAs (Designated Market Areas) across the US
+- Randomly assign 50 DMAs to see ads, 50 to no ads
+- Measure sales lift at the DMA level
+- Control for baseline sales (CUPED-style adjustment at the DMA level)
+
+--
+
+**Challenges:**
+- DMAs vary enormously in size (NYC vs. rural Montana)
+- Need to weight by population or stratify by DMA size
+- Spillovers: people in control DMAs can see ads on streaming/social media (imperfect compliance)
+- Attribution: sales in a DMA might come from visitors from neighboring DMAs
+
+--
+
+.highlight-box[
+**Key insight:** geo experiments work best when the treatment is *geographically contained* (TV, billboards, local promotions). They work poorly for digital treatments that cross geo boundaries (social media ads, viral content).
+]
+
+---
+
+# Choosing the Right Design
+
+| Interference type | Recommended design | Key tradeoff |
+|-------------------|-------------------|--------------|
+| Within-market (supply/demand) | City-level cluster | Bias vs. power |
+| Temporal (pricing, algorithms) | Switchback | Carryover vs. efficiency |
+| Network (social, co-authorship) | Ego-cluster | Cluster size vs. coverage |
+| Geographic (ads, promotions) | Geo experiment | Geo count vs. precision |
+| Two-sided marketplace | Randomize one side | Indirect effects only |
+
+--
+
+**Decision framework:**
+
+1. **Where does interference happen?** Within cities? Across time? Through networks?
+2. **Can you cluster at that level?** How many independent clusters do you have?
+3. **Is the effect large enough to detect with that many clusters?**
+4. **Is there carryover/leakage between clusters?** If so, switchback may be risky.
+
+---
+
+# Summary of the Bias-Variance Tradeoff
+
+```{r final-tradeoff, echo=FALSE, fig.height=4}
+tradeoff_summary <- tibble(
+  design = c("Individual", "Small cluster\n(5 cities)", "City\n(1 city)",
+             "Region\n(5 cities)", "Full cluster\n(20 cities)"),
+  bias = c(0.06, 0.03, 0.005, 0.002, 0.001),
+  variance = c(0.008, 0.015, 0.025, 0.045, 0.09),
+  order = 1:5
+) |>
+  mutate(rmse = sqrt(bias^2 + variance^2))
+
+ggplot(tradeoff_summary, aes(variance, bias, label = design)) +
+  geom_point(aes(size = rmse), color = "steelblue", alpha = 0.7) +
+  geom_text(vjust = -1.2, size = 3.5) +
+  scale_size_continuous(range = c(3, 10), guide = "none") +
+  labs(title = "Every design sits on the bias-variance frontier",
+       subtitle = "Bigger clusters reduce bias but increase variance. RMSE picks the winner.",
+       x = "Variance (fewer independent units)", y = "Bias (residual interference)") +
+  theme(panel.grid.minor = element_blank())
+```
+
+---
+
+# Key Takeaways
+
+1. **Cluster randomization** eliminates interference bias by assigning entire clusters to the same arm. Cost: fewer independent units = more variance.
+
+2. **Switchback designs** randomize over time. Good when interference is spatial. Watch for carryover effects.
+
+3. **Two-sided marketplace designs**: randomize one side, measure the other. Works when one side doesn't interact with itself.
+
+4. **Geo experiments**: natural clusters for advertising. Need many geos (50+) and geographically contained treatments.
+
+5. **Ego-cluster randomization**: for network interference. Cluster = focal unit + neighbors.
+
+6. **The bias-variance tradeoff** is the central tension. Minimize **RMSE**, not just bias or variance alone.
+
+7. The **design effect** formula $n_{eff} = n / [1 + (m-1)\rho]$ tells you how much power you lose from clustering.
+
+---
+
+# Exercise Preview
+
+In the exercise you will:
+
+1. Compare individual vs. city-level randomization in a marketplace simulation
+2. Show that clustering eliminates bias but increases variance
+3. Sweep over cluster sizes and find the RMSE-minimizing level
+4. Simulate a switchback design with and without carryover
+5. Compute design effects for different ICC values
+
+See `exercise.R` for the starter code.
+
+---
+class: center, middle, inverse
+
+# Backup Slides
+
+---
+name: icc-derivation
+
+# Backup: ICC and Design Effect Derivation
+
+The **intra-cluster correlation (ICC)** is:
+
+$$\rho = \frac{\sigma^2_b}{\sigma^2_b + \sigma^2_w}$$
+
+where $\sigma^2_b$ = between-cluster variance and $\sigma^2_w$ = within-cluster variance.
+
+--
+
+For a cluster-level mean with $m$ observations per cluster:
+
+$$\text{Var}(\bar{Y}_c) = \frac{\sigma^2_w}{m} + \sigma^2_b = \frac{\sigma^2_w}{m} + \frac{\rho}{1-\rho} \sigma^2_w$$
+
+--
+
+The variance of the overall mean across $K$ clusters:
+
+$$\text{Var}(\bar{Y}) = \frac{1}{K} \left[\frac{\sigma^2_w}{m}(1 + (m-1)\rho)\right]$$
+
+--
+
+Compare to simple random sampling (SRS) with $n = Km$ units:
+
+$$\text{Var}_{SRS}(\bar{Y}) = \frac{\sigma^2}{n}$$
+
+The ratio $\frac{\text{Var}(\bar{Y})}{\text{Var}_{SRS}(\bar{Y})} = 1 + (m-1)\rho$ is the **design effect (DEFF)**.
+
+The effective sample size is $n_{eff} = n / \text{DEFF}$.
+
+---
+name: switchback-formal
+
+# Backup: Switchback Estimator
+
+For a switchback design with cities $c = 1, \ldots, C$ and periods $t = 1, \ldots, T$:
+
+$$Y_{ct} = \mu_c + \gamma_t + \tau \cdot D_{ct} + \delta \cdot D_{c,t-1} + \varepsilon_{ct}$$
+
+--
+
+- $\mu_c$: city fixed effect
+- $\gamma_t$: period fixed effect
+- $D_{ct}$: treatment indicator for city $c$ at time $t$
+- $\delta$: carryover parameter (ideally $\delta = 0$)
+
+--
+
+The standard switchback estimator ignores carryover:
+
+$$\hat{\tau} = \frac{1}{CT}\sum_{c,t} (2D_{ct} - 1) Y_{ct}$$
+
+--
+
+If $\delta \neq 0$, the estimator is biased:
+
+$$E[\hat{\tau}] = \tau + \delta \cdot \text{Corr}(D_{ct}, D_{c,t-1})$$
+
+Under i.i.d. randomization, $\text{Corr}(D_{ct}, D_{c,t-1}) \approx 0$, so the bias is small but not zero in finite samples. Including $D_{c,t-1}$ as a covariate or using burn-in periods mitigates this.
+
+---
+name: ego-cluster-formal
+
+# Backup: Ego-Cluster Randomization
+
+Define the **ego network** of unit $i$ as $\mathcal{N}_i = \{i\} \cup \{j : j \text{ is connected to } i\}$.
+
+--
+
+**Ego-cluster randomization** assigns the same treatment to all units in $\mathcal{N}_i$:
+
+$$D_j = D_i \quad \forall j \in \mathcal{N}_i$$
+
+--
+
+This ensures that, for unit $i$, all first-degree neighbors have the same treatment status. If interference is limited to first-degree connections:
+
+$$Y_i(D_i, \mathbf{D}_{\mathcal{N}_i}) = Y_i(D_i, D_i, \ldots, D_i) = Y_i(D_i)$$
+
+and SUTVA is restored within the ego cluster.
+
+--
+
+**Challenges:**
+- Ego clusters overlap: if $i$ and $j$ are neighbors, $\mathcal{N}_i \cap \mathcal{N}_j \neq \emptyset$
+- Must resolve overlaps (e.g., graph coloring, independent set sampling)
+- Power depends on the number of *non-overlapping* ego clusters
+- Second-degree interference is not addressed

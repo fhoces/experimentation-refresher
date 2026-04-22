@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Module 2: SUTVA and When It Breaks</title>
+    <meta charset="utf-8" />
+    <script src="slides_files/header-attrs-2.29/header-attrs.js"></script>
+    <link href="slides_files/remark-css-0.0.1/default.css" rel="stylesheet" />
+    <link href="slides_files/remark-css-0.0.1/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+.title[
+# Module 2: SUTVA and When It Breaks
+]
+.subtitle[
+## Interference, Spillovers, and Why Your Experiment Might Be Lying
+]
+
+---
+
+
+&lt;style type="text/css"&gt;
+.remark-code, .remark-inline-code { font-size: 80%; }
+.remark-slide-content { padding: 1em 2em; }
+.small { font-size: 80%; }
+.tiny { font-size: 65%; }
+.highlight-box {
+  background: #fff3e0;
+  border-left: 4px solid #e65100;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+.blue-box {
+  background: #e3f2fd;
+  border-left: 4px solid #1565c0;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+&lt;/style&gt;
+
+
+
+# Course Map
+
+&lt;table&gt;
+&lt;tr&gt;&lt;th&gt;#&lt;/th&gt;&lt;th&gt;Module&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;1&lt;/td&gt;&lt;td&gt;The Experimental Ideal&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;b&gt;2&lt;/b&gt;&lt;/td&gt;&lt;td&gt;&lt;b&gt;SUTVA and When It Breaks&lt;/b&gt; &lt;i&gt;(you are here)&lt;/i&gt;&lt;/td&gt;&lt;td&gt;current&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;3&lt;/td&gt;&lt;td&gt;Designing Around Interference&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;4&lt;/td&gt;&lt;td&gt;Power and Sample Size&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;5&lt;/td&gt;&lt;td&gt;Analyzing Experiments&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;6&lt;/td&gt;&lt;td&gt;Multiple Testing &amp; Subgroups&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;7&lt;/td&gt;&lt;td&gt;External Validity&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;8&lt;/td&gt;&lt;td&gt;Advanced Topics&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+
+---
+
+# Last Time: The Experimental Ideal
+
+Module 1 showed that randomization kills selection bias:
+
+`$$E[Y \mid D=1] - E[Y \mid D=0] = \text{ATE}$$`
+
+--
+
+But this result relied on an assumption we barely mentioned:
+
+.highlight-box[
+**SUTVA (Stable Unit Treatment Value Assumption):** Each unit's outcome depends *only* on its own treatment assignment, not on anyone else's.
+]
+
+--
+
+Today: what happens when SUTVA breaks, why it almost always breaks in marketplace experiments, and how to detect the problem.
+
+---
+
+# The Setup: Driver Bonus Experiment (Again)
+
+Same experiment as Module 1: randomize 500 drivers to a $500 bonus, 500 to control. Measure 6-month retention.
+
+
+
+But now let's think about what happens in the **marketplace**...
+
+--
+
+- Bonus drivers are more motivated and take **more rides**
+- The total number of ride requests is roughly fixed (in the short run)
+- More rides for treated drivers = **fewer rides for control drivers**
+- Control drivers earn less = **lower retention** (even without the bonus effect)
+
+--
+
+.highlight-box[
+The control group outcome is *contaminated* by the treatment. The naive ATE will be **biased upward** -- it captures the direct bonus effect PLUS the harm to the control group.
+]
+
+---
+
+# SUTVA: Stated Precisely
+
+**Component 1 -- No interference:**
+
+`$$Y_i = Y_i(D_i) \quad \text{for all } i$$`
+
+Unit `\(i\)`'s outcome depends only on `\(i\)`'s treatment. Not on `\(D_j\)` for any `\(j \neq i\)`.
+
+--
+
+**Component 2 -- No hidden versions of treatment:**
+
+If `\(D_i = D_i' = 1\)`, then `\(Y_i(D_i) = Y_i(D_i')\)`. There is one "treated" state and one "control" state.
+
+--
+
+When SUTVA holds: `\(2\)` potential outcomes per unit `\((Y_i(0), Y_i(1))\)`.
+
+When SUTVA fails: potential outcomes depend on the **entire** treatment vector `\(\mathbf{D} = (D_1, \ldots, D_N)\)`.
+
+.highlight-box[
+With `\(N\)` units, there are `\(2^N\)` possible treatment vectors. Each unit has `\(2^N\)` potential outcomes instead of `\(2\)`. The ATE is no longer well-defined without specifying `\(\mathbf{D}\)`.
+]
+
+&lt;a href="#sutva-formal" style="position:absolute; bottom:12px; left:40px; font-size:11px; background:#e8eaf6; padding:2px 8px; border-radius:3px; z-index:100;"&gt;Formal notation&lt;/a&gt;
+
+---
+
+# Seeing the Bias: A Simulation
+
+&lt;img src="slides_files/figure-html/interference-sim-1.png" style="display: block; margin: auto;" /&gt;
+
+---
+
+# Where Does the Bias Come From?
+
+.pull-left[
+**Without interference:**
+- `\(E[Y(0) \mid D=0]\)` = true control outcome
+- `\(E[Y(1) \mid D=1]\)` = true treated outcome
+- Difference = ATE
+
+**With interference:**
+- `\(E[Y(0) \mid D=0]\)` is **too low** (control drivers harmed)
+- `\(E[Y(1) \mid D=1]\)` is roughly correct
+- Difference = ATE + bias
+]
+
+.pull-right[
+&lt;img src="slides_files/figure-html/bias-direction-1.png" style="display: block; margin: auto;" /&gt;
+]
+
+---
+
+# The Bias Grows with Interference Strength
+
+&lt;img src="slides_files/figure-html/bias-vs-strength-1.png" style="display: block; margin: auto;" /&gt;
+
+In a real marketplace, interference strength depends on market thickness (how tight supply is), substitutability, and network density.
+
+---
+
+# Hidden Versions of Treatment
+
+SUTVA also requires **one version** of treatment. This can fail when:
+
+--
+
+.pull-left[
+**The treatment differs by context:**
+- A $500 bonus in San Francisco vs. rural Iowa
+- A new algorithm in a thick market vs. thin market
+- Same nudge email, but recipient has 1 co-author vs. 10
+]
+
+--
+
+.pull-right[
+**The treatment differs by implementation:**
+- New driver app version with different bugs on iOS vs. Android
+- "Same" coupon delivered via email vs. push notification
+- Treatment intensity varies (some drivers get reminded, others don't)
+]
+
+--
+
+.highlight-box[
+**Interview framing:** "The treatment effect is 5%." Which treatment? For whom? Delivered how? If the answer is "it depends," you may have a hidden versions problem.
+]
+
+---
+
+# Why Interviewers Love This Topic
+
+In tech, the three most common SUTVA violations are:
+
+--
+
+**1. Marketplace interference** (ride-sharing, food delivery, e-commerce)
+- Supply and demand are linked: treating one side affects the other
+- "We tested a new surge algorithm on 10% of riders" -- but those riders affect driver allocation for everyone
+
+--
+
+**2. Network interference** (social media, communication tools)
+- Treating user A changes what user B sees in their feed
+- Viral features: a treated user shares content with control users
+
+--
+
+**3. Shared resources** (cloud infrastructure, ad auctions)
+- Bidding experiments: treating some advertisers changes auction outcomes for all
+- Capacity experiments: allocating more servers to treated users reduces capacity for control
+
+---
+
+# Application: Marketplace Interference in Detail
+
+&lt;img src="slides_files/figure-html/marketplace-diagram-1.png" style="display: block; margin: auto;" /&gt;
+
+---
+
+# Application: Co-Author Network Spillovers
+
+Consider an experiment on academic researchers. 80 studies are randomized into treatment arms (T0-T3). Each study has 1-3 authors drawn from a shared pool.
+
+&lt;img src="slides_files/figure-html/coauthor-network-1.png" style="display: block; margin: auto;" /&gt;
+
+---
+
+# Co-Author Spillovers: The Problem
+
+&lt;img src="slides_files/figure-html/spillover-bias-1.png" style="display: block; margin: auto;" /&gt;
+
+Control studies connected to treated co-authors show **higher** reporting. The naive treatment effect **underestimates** the true effect (spillovers help controls).
+
+---
+
+# Partial vs General Equilibrium
+
+A crucial distinction for marketplace experiments:
+
+--
+
+.pull-left[
+**Partial equilibrium** (small experiment)
+- Treat 1% of drivers
+- Market barely moves
+- Estimate `\(\approx\)` direct effect of bonus
+- Interference is negligible
+]
+
+--
+
+.pull-right[
+**General equilibrium** (full rollout)
+- Treat 100% of drivers
+- Market adjusts: more drivers → lower wages per ride → some drivers exit anyway
+- The effect you measured at 1% **does not predict** the rollout outcome
+]
+
+--
+
+.highlight-box[
+**The core problem:** experiments estimate partial equilibrium effects. Business decisions require general equilibrium predictions. The gap between them can be large in thick markets.
+]
+
+---
+
+# Partial vs GE: Simulated
+
+&lt;img src="slides_files/figure-html/partial-ge-1.png" style="display: block; margin: auto;" /&gt;
+
+---
+
+# Detecting SUTVA Violations
+
+How do you know if interference is a problem in your experiment?
+
+--
+
+**1. Domain knowledge:** Ask "does my treatment change the environment for control units?"
+- Marketplace: does treating suppliers change demand/supply for control suppliers?
+- Network: do treated and control users interact?
+
+--
+
+**2. Check for dose-response in control outcomes:**
+- If control units in markets with many treated units have different outcomes than control units in markets with few treated units, interference is present.
+
+--
+
+**3. Vary the treatment fraction:**
+- Run the experiment at different saturation levels (e.g., 10% vs 50% treated)
+- If the estimated ATE differs, SUTVA is violated
+
+--
+
+**4. Look at control group outcomes over time:**
+- If control outcomes *worsen* after the experiment starts, the control group is being contaminated.
+
+---
+
+# How Treatment Fraction Reveals Interference
+
+&lt;img src="slides_files/figure-html/saturation-test-1.png" style="display: block; margin: auto;" /&gt;
+
+.highlight-box[
+If control outcomes vary with treatment saturation, SUTVA is violated. The treated-control gap grows even though the *direct* effect is constant.
+]
+
+---
+
+# Summary: Types of SUTVA Violations
+
+| Type | Mechanism | Bias direction | Example |
+|------|-----------|---------------|---------|
+| **Marketplace** | Supply/demand reallocation | Overestimates ATE | Driver bonus steals rides from control |
+| **Network** | Information/behavior spreads | Underestimates ATE | Co-author learns about reporting |
+| **Shared resource** | Capacity competition | Overestimates ATE | Server allocation experiment |
+| **General equilibrium** | Prices/wages adjust | Direction depends | Full rollout changes market structure |
+
+--
+
+.highlight-box[
+**The key question for any experiment:** "If I treat more units, does the control group outcome change?" If yes, SUTVA is violated.
+]
+
+---
+
+# What Can We Do About It?
+
+Preview of Module 3:
+
+--
+
+1. **Cluster randomization** -- randomize at a level where interference is contained (cities, markets, time periods)
+
+--
+
+2. **Switchback designs** -- alternate treatment on/off over time within the same unit
+
+--
+
+3. **Two-sided marketplace designs** -- randomize on one side, measure effects on the other
+
+--
+
+4. **Ego-cluster randomization** -- for network experiments, randomize the cluster around each unit
+
+--
+
+Each approach trades **bias** for **variance**. Bigger clusters reduce interference bias but give you fewer independent units.
+
+---
+
+# Key Takeaways
+
+1. **SUTVA** = no interference + no hidden versions of treatment. It's an assumption, not a fact.
+
+2. In **marketplaces**, treating one side (drivers) almost always affects the other side (riders) and within-side competitors (other drivers). Naive ATE is biased.
+
+3. In **networks**, treatment spills over through connections. Co-authors, friends, neighbors can all be contaminated.
+
+4. The **direction** of bias depends on whether spillovers help or harm the control group.
+
+5. **Partial vs general equilibrium**: your small experiment estimates a partial equilibrium effect. The full rollout will be different.
+
+6. **Detection**: vary the treatment fraction, check control outcomes against treatment saturation, use domain knowledge.
+
+---
+
+# Exercise Preview
+
+In the exercise you will:
+
+1. Simulate a marketplace with and without interference
+2. Show that interference biases the naive ATE upward
+3. Sweep over interference strengths and see the bias grow
+4. Build a co-author network and simulate spillover contamination
+5. Compare partial vs general equilibrium predictions
+
+See `exercise.R` for the starter code.
+
+---
+class: center, middle, inverse
+
+# Backup Slides
+
+---
+name: sutva-formal
+
+# Backup: SUTVA Formal Notation
+
+Without SUTVA, each unit `\(i\)`'s potential outcome depends on the entire treatment vector:
+
+`$$Y_i = Y_i(\mathbf{D}) = Y_i(D_1, D_2, \ldots, D_N)$$`
+
+With `\(N\)` binary-treatment units, each unit has `\(2^N\)` potential outcomes.
+
+--
+
+**SUTVA simplifies this:**
+
+`$$Y_i(\mathbf{D}) = Y_i(D_i) \quad \forall \mathbf{D}, \mathbf{D}' \text{ such that } D_i = D_i'$$`
+
+--
+
+Under SUTVA, we can write the observed outcome as:
+
+`$$Y_i^{obs} = D_i \cdot Y_i(1) + (1 - D_i) \cdot Y_i(0)$$`
+
+and the ATE is well-defined as:
+
+`$$\tau = E[Y_i(1) - Y_i(0)]$$`
+
+Without SUTVA, we need to define which treatment vector we mean. The "average direct effect" becomes:
+
+`$$\tau(\mathbf{d}_{-i}) = E[Y_i(1, \mathbf{d}_{-i}) - Y_i(0, \mathbf{d}_{-i})]$$`
+
+which depends on `\(\mathbf{d}_{-i}\)`, the treatment assignments of all other units.
+
+---
+name: interference-types
+
+# Backup: Taxonomy of Interference
+
+**Direct interference:** unit `\(j\)`'s treatment directly changes unit `\(i\)`'s outcome.
+- Example: vaccinating `\(j\)` reduces `\(i\)`'s infection probability.
+
+--
+
+**Indirect interference (through market/prices):** treatment changes an equilibrium variable that affects everyone.
+- Example: subsidizing some sellers lowers the market price, affecting all sellers.
+
+--
+
+**Behavioral interference:** treatment changes `\(j\)`'s behavior, and `\(i\)` observes and responds.
+- Example: co-author `\(j\)` learns about reporting standards and shares this knowledge.
+
+--
+
+**Mechanical interference:** the experimental design itself creates interference.
+- Example: in a waitlist design, adding someone to treatment removes them from control, changing the control group composition.
+
+---
+name: ge-formal
+
+# Backup: Partial vs General Equilibrium -- Formal
+
+Let `\(p\)` denote a market-clearing price and `\(\alpha\)` the fraction treated.
+
+**Partial equilibrium** (small `\(\alpha\)`): price is approximately fixed at `\(p_0\)`.
+
+`$$\hat{\tau}_{PE} = E[Y_i(1, p_0)] - E[Y_i(0, p_0)]$$`
+
+--
+
+**General equilibrium** (large `\(\alpha\)`): price adjusts to `\(p(\alpha)\)`.
+
+`$$\tau_{GE}(\alpha) = E[Y_i(1, p(\alpha))] - E[Y_i(0, p(\alpha))]$$`
+
+--
+
+The experiment estimates `\(\hat{\tau}_{PE}\)`, but the rollout delivers `\(\tau_{GE}(1)\)`.
+
+The gap depends on how much `\(p\)` moves and how sensitive outcomes are to `\(p\)`:
+
+`$$\hat{\tau}_{PE} - \tau_{GE}(1) = \underbrace{(p_0 - p(1))}_{\text{price change}} \times \underbrace{\frac{\partial}{\partial p}[E[Y_i(1,p)] - E[Y_i(0,p)]]}_{\text{differential price sensitivity}}$$`
+
+This is a first-order approximation. In practice, you often cannot sign this without structural modeling.
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false,
+"ratio": "16:9"
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+// add `data-at-shortcutkeys` attribute to <body> to resolve conflicts with JAWS
+// screen reader (see PR #262)
+(function(d) {
+  let res = {};
+  d.querySelectorAll('.remark-help-content table tr').forEach(tr => {
+    const t = tr.querySelector('td:nth-child(2)').innerText;
+    tr.querySelectorAll('td:first-child .key').forEach(key => {
+      const k = key.innerText;
+      if (/^[a-z]$/.test(k)) res[k] = t;  // must be a single letter (key)
+    });
+  });
+  d.body.setAttribute('data-at-shortcutkeys', JSON.stringify(res));
+})(document);
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

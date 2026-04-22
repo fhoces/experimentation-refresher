@@ -1,0 +1,594 @@
+---
+title: "Module 4: Power and Sample Size"
+subtitle: "How Big Does Your Experiment Need to Be?"
+output:
+  xaringan::moon_reader:
+    css: [default, default-fonts]
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+      ratio: "16:9"
+---
+
+```{css, echo=FALSE}
+.remark-code, .remark-inline-code { font-size: 80%; }
+.remark-slide-content { padding: 1em 2em; }
+.small { font-size: 80%; }
+.tiny { font-size: 65%; }
+.highlight-box {
+  background: #fff3e0;
+  border-left: 4px solid #e65100;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+.blue-box {
+  background: #e3f2fd;
+  border-left: 4px solid #1565c0;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, fig.align = "center",
+  fig.width = 10, fig.height = 4.2, dpi = 150,
+  message = FALSE, warning = FALSE
+)
+library(tidyverse)
+theme_set(theme_minimal(base_size = 14))
+set.seed(42)
+```
+
+# Course Map
+
+<table>
+<tr><th>#</th><th>Module</th><th>Status</th></tr>
+<tr><td>1</td><td>The Experimental Ideal</td><td>done</td></tr>
+<tr><td>2</td><td>SUTVA and When It Breaks</td><td>done</td></tr>
+<tr><td>3</td><td>Designing Around Interference</td><td>done</td></tr>
+<tr><td><b>4</b></td><td><b>Power and Sample Size</b> <i>(you are here)</i></td><td>current</td></tr>
+<tr><td>5</td><td>Analyzing Experiments</td><td>upcoming</td></tr>
+<tr><td>6</td><td>Multiple Testing & Subgroups</td><td>upcoming</td></tr>
+<tr><td>7</td><td>External Validity</td><td>upcoming</td></tr>
+<tr><td>8</td><td>Advanced Topics</td><td>upcoming</td></tr>
+</table>
+
+---
+
+# The Problem: An Underpowered Experiment
+
+A ride-sharing platform runs an A/B test: does a new splash screen increase rider sign-ups? They test on 200 users per arm for one week.
+
+```{r underpowered-setup, echo=FALSE}
+n_small <- 200
+true_effect <- 0.02  # 2pp lift on a 10% baseline
+sim_small <- function(i) {
+  control <- rbinom(n_small, 1, prob = 0.10)
+  treated <- rbinom(n_small, 1, prob = 0.10 + true_effect)
+  t.test(treated, control)$p.value
+}
+pvals_small <- map_dbl(1:2000, sim_small)
+power_small <- mean(pvals_small < 0.05)
+```
+
+--
+
+Result: p = 0.38. "No significant effect. Kill the feature."
+
+--
+
+But the true effect **is** 2 percentage points (a 20% relative lift!). With only 200 per arm, the experiment had **`r round(power_small * 100)`% power** -- it almost never would have detected the real effect.
+
+--
+
+.highlight-box[
+**The most common mistake in experimentation is running underpowered tests.** You don't learn "the feature doesn't work" -- you learn nothing.
+]
+
+---
+
+# What Is Statistical Power?
+
+.blue-box[
+**Power** = $P(\text{reject } H_0 \mid H_1 \text{ is true})$ -- the probability of detecting a real effect when it exists.
+]
+
+--
+
+```{r power-diagram, echo=FALSE, fig.height=3.5}
+x <- seq(-4, 6, length.out = 500)
+null_dist <- dnorm(x, mean = 0, sd = 1)
+alt_dist <- dnorm(x, mean = 2.5, sd = 1)
+crit <- qnorm(0.975)
+
+df_plot <- tibble(x = x, null = null_dist, alt = alt_dist)
+
+ggplot(df_plot) +
+  geom_line(aes(x, null), color = "grey40", linewidth = 1) +
+  geom_line(aes(x, alt), color = "steelblue", linewidth = 1) +
+  geom_area(data = df_plot |> filter(x > crit),
+            aes(x, null), fill = "firebrick", alpha = 0.3) +
+  geom_area(data = df_plot |> filter(x > crit),
+            aes(x, alt), fill = "steelblue", alpha = 0.3) +
+  geom_vline(xintercept = crit, linetype = "dashed") +
+  annotate("text", x = -1.2, y = 0.3, label = "H0 (no effect)", color = "grey30", size = 4.5) +
+  annotate("text", x = 3.7, y = 0.3, label = "H1 (real effect)", color = "steelblue", size = 4.5) +
+  annotate("text", x = crit + 0.15, y = 0.42, label = "critical\nvalue", hjust = 0, size = 3.5) +
+  annotate("text", x = 2.5, y = 0.05, label = "Power", color = "steelblue", fontface = "bold", size = 5) +
+  annotate("text", x = 2.7, y = 0.015, label = expression(alpha), color = "firebrick", size = 4) +
+  labs(x = "Test statistic", y = "Density",
+       title = "Power = shaded blue area under H1 beyond the critical value") +
+  theme(axis.text.y = element_blank())
+```
+
+---
+
+# The Four Knobs
+
+Power depends on exactly **four** things:
+
+| Knob | Turn it this way | Power goes... |
+|------|-----------------|---------------|
+| Effect size $(\delta)$ | Larger | Up |
+| Sample size $(n)$ | Larger | Up |
+| Variance $(\sigma^2)$ | Smaller | Up |
+| Significance level $(\alpha)$ | Larger | Up |
+
+--
+
+The formula for a two-sample test with equal arms:
+
+$$n_{\text{per arm}} = \frac{(z_{1-\alpha/2} + z_\beta)^2 \cdot 2\sigma^2}{\delta^2}$$
+
+--
+
+.highlight-box[
+**But you should rarely use this formula.** Simulation-based power analysis is more flexible, more intuitive, and handles real-world complications (clustering, non-normal outcomes, covariates).
+]
+
+---
+
+# Simulation-Based Power Analysis
+
+The idea is dead simple:
+
+1. **Simulate** data under $H_1$ (with a known effect)
+2. **Analyze** it the way you would analyze the real experiment
+3. **Check** if you reject $H_0$
+4. **Repeat** 1,000+ times. Power = fraction of rejections.
+
+--
+
+```{r sim-power-basic}
+sim_power <- function(n_per_arm, effect, baseline = 0.10, nsim = 2000) {
+  rejections <- map_lgl(1:nsim, function(i) {
+    control <- rbinom(n_per_arm, 1, prob = baseline)
+    treated <- rbinom(n_per_arm, 1, prob = baseline + effect)
+    t.test(treated, control)$p.value < 0.05
+  })
+  mean(rejections)
+}
+```
+
+--
+
+```{r sim-power-check}
+sim_power(n_per_arm = 200, effect = 0.02)   # too small
+sim_power(n_per_arm = 5000, effect = 0.02)  # much better
+```
+
+---
+
+# Power Curves: Seeing the Trade-offs
+
+```{r power-curve, echo=FALSE, fig.height=4}
+sample_sizes <- c(100, 200, 500, 1000, 2000, 5000, 10000, 15000, 20000)
+power_results <- tibble(
+  n_per_arm = sample_sizes,
+  power = map_dbl(sample_sizes, ~ sim_power(.x, effect = 0.02, nsim = 1000))
+)
+
+ggplot(power_results, aes(n_per_arm, power)) +
+  geom_line(linewidth = 1.2, color = "steelblue") +
+  geom_point(size = 3, color = "steelblue") +
+  geom_hline(yintercept = 0.80, linetype = "dashed", color = "firebrick") +
+  annotate("text", x = 15000, y = 0.83, label = "80% power threshold",
+           color = "firebrick", size = 4) +
+  scale_x_continuous(labels = scales::comma) +
+  labs(title = "Power curve: detecting a 2pp lift on 10% baseline",
+       x = "Sample size per arm", y = "Power")
+```
+
+--
+
+You need roughly **5,000-10,000 users per arm** to reliably detect a 2 percentage point lift on a 10% baseline conversion rate.
+
+---
+
+# Minimum Detectable Effect (MDE)
+
+.blue-box[
+**MDE** = the smallest effect your experiment can reliably detect (at 80% power, alpha = 0.05).
+]
+
+--
+
+The business doesn't ask "what's our power?" They ask:
+
+> "We can run this test for 2 weeks and get 10,000 users per arm. **What's the smallest lift we can detect?**"
+
+--
+
+```{r mde-curve, echo=FALSE, fig.height=3.2}
+effects <- seq(0.005, 0.06, by = 0.005)
+mde_results <- tibble(
+  effect = effects,
+  power = map_dbl(effects, ~ sim_power(n_per_arm = 5000, effect = .x, nsim = 1000))
+)
+
+ggplot(mde_results, aes(effect, power)) +
+  geom_line(linewidth = 1.2, color = "steelblue") +
+  geom_point(size = 3, color = "steelblue") +
+  geom_hline(yintercept = 0.80, linetype = "dashed", color = "firebrick") +
+  scale_x_continuous(labels = scales::percent) +
+  labs(title = "MDE: What effect can 5,000 per arm detect?",
+       subtitle = "MDE ~ 2% (where the curve crosses 80% power)",
+       x = "True effect size", y = "Power")
+```
+
+---
+
+# Application: Online Ads
+
+An ad platform wants to test a new ad format. Baseline click-through rate (CTR) is 3%. They want to detect a 2 percentage point lift (to 5%).
+
+--
+
+.pull-left[
+```{r ads-power}
+# How many impressions per arm?
+sizes <- c(100, 200, 500, 1000, 2000)
+ads_power <- tibble(
+  n = sizes,
+  power = map_dbl(sizes, ~ sim_power(
+    .x, effect = 0.02,
+    baseline = 0.03, nsim = 1000
+  ))
+)
+ads_power |> knitr::kable(digits = 2)
+```
+]
+
+--
+
+.pull-right[
+At CTR = 3%, the variance is very low ( $p(1-p) \approx 0.03$ ), so detecting a 2pp absolute lift is easier than at a 50% baseline.
+
+You need about **500-1,000 impressions per arm** -- quite feasible for an ad platform.
+
+But what if you want to detect a **0.1pp** lift? That's ~500,000 per arm.
+]
+
+---
+
+# The Clustering Problem
+
+What if randomization is at the **city level**, not the individual level?
+
+--
+
+```{r cluster-sim-setup}
+sim_power_cluster <- function(n_clusters, n_per_cluster, effect,
+                              icc = 0.05, nsim = 1000) {
+  rejections <- map_lgl(1:nsim, function(i) {
+    cluster_id <- rep(1:n_clusters, each = n_per_cluster)
+    treatment <- rep(sample(rep(c(0, 1), each = n_clusters / 2)),
+                     each = n_per_cluster)
+    # Cluster random effect
+    cluster_effect <- rep(rnorm(n_clusters, 0,
+                                sd = sqrt(icc / (1 - icc))),
+                          each = n_per_cluster)
+    y <- rnorm(n_clusters * n_per_cluster,
+               mean = treatment * effect + cluster_effect, sd = 1)
+    # Cluster-robust inference
+    df <- data.frame(y = y, treatment = treatment, cluster = cluster_id)
+    coef(summary(lm(y ~ treatment, data = df)))["treatment", "Pr(>|t|)"] < 0.05
+  })
+  mean(rejections)
+}
+```
+
+---
+
+# Clustering Kills Power
+
+```{r cluster-comparison, echo=FALSE, fig.height=4}
+# Compare: 1000 individuals vs 20 clusters of 50
+individual_power <- map_dbl(
+  seq(0.05, 0.4, by = 0.05),
+  ~ sim_power(500, effect = .x, baseline = 0.5, nsim = 500)
+)
+
+cluster_power <- map_dbl(
+  seq(0.05, 0.4, by = 0.05),
+  ~ sim_power_cluster(20, 50, effect = .x, icc = 0.05, nsim = 500)
+)
+
+bind_rows(
+  tibble(effect = seq(0.05, 0.4, by = 0.05),
+         power = individual_power, design = "1,000 individuals"),
+  tibble(effect = seq(0.05, 0.4, by = 0.05),
+         power = cluster_power, design = "20 clusters of 50")
+) |>
+  ggplot(aes(effect, power, color = design)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0.8, linetype = "dashed", color = "grey50") +
+  labs(title = "Same total N = 1,000, but clustering destroys power",
+       subtitle = "With 20 clusters and ICC = 0.05, you need much larger effects to reach 80%",
+       x = "True effect size", y = "Power", color = "Design") +
+  theme(legend.position = "top")
+```
+
+---
+
+# The Design Effect and ICC
+
+.blue-box[
+**ICC** (Intra-cluster Correlation) = fraction of total variance that is *between* clusters.
+
+**Design effect** $= 1 + (m - 1) \times \text{ICC}$, where $m$ = cluster size.
+]
+
+--
+
+```{r design-effect, echo=FALSE}
+tibble(
+  `Cluster size (m)` = c(10, 50, 100, 500),
+  `ICC = 0.01` = 1 + (c(10, 50, 100, 500) - 1) * 0.01,
+  `ICC = 0.05` = 1 + (c(10, 50, 100, 500) - 1) * 0.05,
+  `ICC = 0.10` = 1 + (c(10, 50, 100, 500) - 1) * 0.10
+) |> knitr::kable(digits = 1)
+```
+
+--
+
+.highlight-box[
+**Design effect** = how many times more samples you need compared to individual-level randomization. With 500 users per cluster and ICC = 0.05, you need **25x** the sample size. Adding more users per cluster barely helps -- you need **more clusters**.
+]
+
+---
+
+# Application: Ride-Sharing City-Level Experiment
+
+A ride-sharing company tests a driver bonus in 20 cities (10 treatment, 10 control), ~500 drivers per city. The ICC for driver earnings is 0.08.
+
+--
+
+.pull-left[
+**Design effect:** $1 + (500 - 1) \times 0.08 = 40.9$
+
+**Effective sample size:** $\frac{10{,}000}{40.9} \approx 245$ per arm
+
+Even with 10,000 drivers total, you effectively have 245.
+]
+
+--
+
+.pull-right[
+```{r city-power, echo=FALSE}
+city_powers <- tibble(
+  n_cities = c(10, 20, 40, 60, 100),
+  power = map_dbl(c(10, 20, 40, 60, 100),
+                  ~ sim_power_cluster(.x, 500, effect = 0.15,
+                                       icc = 0.08, nsim = 500))
+)
+city_powers |> knitr::kable(
+  col.names = c("Cities per arm", "Power"), digits = 2)
+```
+
+With only 10 cities per arm, power is low even for a large effect (0.15 SD). You need **40+ cities per arm** to get adequate power.
+]
+
+---
+
+# More Clusters vs. Bigger Clusters
+
+```{r more-vs-bigger, echo=FALSE, fig.height=4}
+# Fix total N = 2000, vary cluster count
+configs <- tibble(
+  n_clusters = c(10, 20, 40, 100, 200),
+  n_per_cluster = 2000 / c(10, 20, 40, 100, 200)
+) |>
+  mutate(
+    power = map2_dbl(n_clusters, n_per_cluster,
+                     ~ sim_power_cluster(.x, .y, effect = 0.2,
+                                          icc = 0.05, nsim = 500)),
+    label = paste0(n_clusters, " clusters x ", n_per_cluster, " each")
+  )
+
+ggplot(configs, aes(n_clusters, power)) +
+  geom_line(linewidth = 1.2, color = "steelblue") +
+  geom_point(size = 3, color = "steelblue") +
+  geom_text(aes(label = label), vjust = -1, size = 3.5) +
+  geom_hline(yintercept = 0.8, linetype = "dashed", color = "firebrick") +
+  labs(title = "Total N = 2,000 (fixed). More clusters >> bigger clusters.",
+       subtitle = "ICC = 0.05. Power improves by splitting into more, smaller clusters.",
+       x = "Number of clusters", y = "Power") +
+  ylim(0, 1)
+```
+
+---
+
+# Reducing Variance with Pre-Treatment Covariates
+
+You can boost power without more users by **reducing residual variance**:
+
+$$n \propto \frac{\sigma^2}{\delta^2} \quad \Rightarrow \quad \text{cut } \sigma^2 \text{ in half} \Leftrightarrow \text{double } n$$
+
+--
+
+```{r covariate-power, fig.height=3.2}
+sim_power_covariate <- function(n_per_arm, effect, r_squared, nsim = 1000) {
+  rejections <- map_lgl(1:nsim, function(i) {
+    x_pre <- rnorm(2 * n_per_arm)
+    treat <- rep(c(0, 1), each = n_per_arm)
+    y <- sqrt(r_squared) * x_pre + treat * effect +
+         rnorm(2 * n_per_arm, sd = sqrt(1 - r_squared))
+    coef(summary(lm(y ~ treat + x_pre)))[2, 4] < 0.05
+  })
+  mean(rejections)
+}
+cat("Without covariate:", sim_power(2000, effect = 0.1, baseline = 0.5, nsim = 1000), "\n")
+cat("With covariate (R^2=0.3):", sim_power_covariate(2000, effect = 0.1, r_squared = 0.3), "\n")
+```
+
+--
+
+.highlight-box[
+**CUPED preview:** Using pre-experiment data (last week's clicks, last month's rides) as a covariate can reduce variance by 30-50%, equivalent to doubling your sample size for free. Module 5 covers the mechanics.
+]
+
+---
+
+# Summary: The Power Checklist
+
+Before running any experiment, answer these:
+
+--
+
+1. **What is the MDE?** What's the smallest effect that matters for the business?
+
+--
+
+2. **What is the baseline rate and variance?** Look at historical data.
+
+--
+
+3. **Is randomization at the individual level or clustered?** If clustered, how many clusters do you have? What is the ICC?
+
+--
+
+4. **Can you reduce variance?** Pre-treatment covariates, stratification, CUPED?
+
+--
+
+5. **How long do you need to run?** More time = more users, but watch out for novelty effects and contamination.
+
+--
+
+.highlight-box[
+**Rules of thumb:** (1) 80% power is the standard minimum. (2) You almost always need more samples than you think. (3) For clustered designs, the number of *clusters* matters far more than the number of units per cluster.
+]
+
+---
+
+# Key Takeaways
+
+1. **Power** = $P(\text{reject } H_0 \mid H_1 \text{ true})$. Low power means you learn nothing from a null result.
+
+2. **Four knobs:** effect size, sample size, variance, significance level. You usually control $n$ and can reduce $\sigma^2$.
+
+3. **Simulation-based power** is more flexible than formulas. Simulate your analysis pipeline directly.
+
+4. **MDE** is the question the business actually asks: "Given our traffic, what can we detect?"
+
+5. **Clustering** destroys power via the design effect $1 + (m-1) \times \text{ICC}$. Add more clusters, not more units per cluster.
+
+6. **Pre-treatment covariates** can reduce variance dramatically -- a free lunch for power. (Details in Module 5.)
+
+---
+
+# Exercise Preview
+
+In the exercise you will:
+
+1. Build a simulation-based power calculator for proportions
+2. Generate power curves for different sample sizes and effect sizes
+3. Demonstrate how clustering kills power (compare individual vs. cluster randomization)
+4. Compute the design effect and effective sample size
+5. Show how adding a covariate recovers power lost to noise
+
+See `exercise.R` for the starter code.
+
+---
+class: center, middle, inverse
+
+# Backup Slides
+
+---
+name: power-formula-derivation
+
+# Backup: Power Formula Derivation .tiny[(for two-sample z-test)]
+
+Under $H_0$: $\bar{Y}_T - \bar{Y}_C \sim N\left(0, \frac{2\sigma^2}{n}\right)$
+
+Under $H_1$: $\bar{Y}_T - \bar{Y}_C \sim N\left(\delta, \frac{2\sigma^2}{n}\right)$
+
+--
+
+Reject $H_0$ when $\frac{\bar{Y}_T - \bar{Y}_C}{\sqrt{2\sigma^2/n}} > z_{1-\alpha/2}$
+
+--
+
+Power = $P\left(\frac{\bar{Y}_T - \bar{Y}_C}{\sqrt{2\sigma^2/n}} > z_{1-\alpha/2} \;\middle|\; H_1\right)$
+
+--
+
+$= P\left(Z + \frac{\delta}{\sqrt{2\sigma^2/n}} > z_{1-\alpha/2}\right)$ where $Z \sim N(0,1)$
+
+$= P\left(Z > z_{1-\alpha/2} - \frac{\delta\sqrt{n}}{\sqrt{2}\sigma}\right)$
+
+--
+
+Setting power $= 1 - \beta$ and solving for $n$:
+
+$$n = \frac{2\sigma^2 (z_{1-\alpha/2} + z_{1-\beta})^2}{\delta^2}$$
+
+---
+name: icc-derivation
+
+# Backup: ICC and Design Effect
+
+**ICC** = $\rho = \frac{\sigma_b^2}{\sigma_b^2 + \sigma_w^2}$, where $\sigma_b^2$ = between-cluster variance and $\sigma_w^2$ = within-cluster variance.
+
+--
+
+The variance of the cluster mean is:
+
+$$\text{Var}(\bar{Y}_{c}) = \frac{\sigma_w^2}{m} + \sigma_b^2$$
+
+--
+
+The variance of the treatment effect estimator with $J$ clusters per arm of size $m$:
+
+$$\text{Var}(\hat{\tau}) = \frac{2(\sigma_w^2 + m\sigma_b^2)}{Jm} = \frac{2\sigma^2}{Jm} \cdot [1 + (m-1)\rho]$$
+
+--
+
+The term $\text{DEFF} = 1 + (m-1)\rho$ is the **design effect**. It inflates the variance relative to individual-level randomization.
+
+Effective sample size: $n_{\text{eff}} = \frac{Jm}{\text{DEFF}}$
+
+---
+name: mde-formula
+
+# Backup: MDE Formula
+
+From the power formula, solving for $\delta$ instead of $n$:
+
+$$\text{MDE} = (z_{1-\alpha/2} + z_{1-\beta}) \cdot \sqrt{\frac{2\sigma^2}{n}}$$
+
+--
+
+For a binary outcome with baseline $p$:
+
+$$\text{MDE} = (z_{0.975} + z_{0.80}) \cdot \sqrt{\frac{2p(1-p)}{n}} \approx 2.8 \cdot \sqrt{\frac{2p(1-p)}{n}}$$
+
+--
+
+For clustered designs, multiply the standard error by $\sqrt{\text{DEFF}}$:
+
+$$\text{MDE}_{\text{clustered}} = (z_{1-\alpha/2} + z_{1-\beta}) \cdot \sqrt{\frac{2\sigma^2 \cdot [1 + (m-1)\rho]}{Jm}}$$

@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Module 6: Multiple Testing &amp; Subgroups</title>
+    <meta charset="utf-8" />
+    <script src="slides_files/header-attrs-2.29/header-attrs.js"></script>
+    <link href="slides_files/remark-css-0.0.1/default.css" rel="stylesheet" />
+    <link href="slides_files/remark-css-0.0.1/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+.title[
+# Module 6: Multiple Testing &amp; Subgroups
+]
+.subtitle[
+## Why 20 Subgroups Guarantee False Positives (and What to Do About It)
+]
+
+---
+
+
+&lt;style type="text/css"&gt;
+.remark-code, .remark-inline-code { font-size: 80%; }
+.remark-slide-content { padding: 1em 2em; }
+.small { font-size: 80%; }
+.tiny { font-size: 65%; }
+.highlight-box {
+  background: #fff3e0;
+  border-left: 4px solid #e65100;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+.blue-box {
+  background: #e3f2fd;
+  border-left: 4px solid #1565c0;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+&lt;/style&gt;
+
+
+
+# Course Map
+
+&lt;table&gt;
+&lt;tr&gt;&lt;th&gt;#&lt;/th&gt;&lt;th&gt;Module&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;1&lt;/td&gt;&lt;td&gt;The Experimental Ideal&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;2&lt;/td&gt;&lt;td&gt;SUTVA and When It Breaks&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;3&lt;/td&gt;&lt;td&gt;Designing Around Interference&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;4&lt;/td&gt;&lt;td&gt;Power and Sample Size&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;5&lt;/td&gt;&lt;td&gt;Analyzing Experiments&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;b&gt;6&lt;/b&gt;&lt;/td&gt;&lt;td&gt;&lt;b&gt;Multiple Testing &amp; Subgroups&lt;/b&gt; &lt;i&gt;(you are here)&lt;/i&gt;&lt;/td&gt;&lt;td&gt;current&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;7&lt;/td&gt;&lt;td&gt;External Validity&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;8&lt;/td&gt;&lt;td&gt;Advanced Topics&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+
+---
+
+# The Setup: 10 Ad Creatives, 1 Winner?
+
+An online ads team tests 10 ad creatives against a control. **No creative is actually better** (true effect = 0 for all).
+
+&lt;img src="slides_files/figure-html/aa-ads-1.png" style="display: block; margin: auto;" /&gt;
+
+--
+
+With 10 tests at `\(\alpha = 0.05\)`, the probability of **at least one** false positive is `\(1 - (1-0.05)^{10} = 0.4\)`.
+
+---
+
+# The Multiple Comparisons Problem
+
+.blue-box[
+**Definition:** When you test `\(m\)` hypotheses simultaneously, each at level `\(\alpha\)`, the probability of at least one false positive (the **family-wise error rate**, FWER) grows rapidly.
+]
+
+--
+
+`$$\text{FWER} = 1 - (1 - \alpha)^m$$`
+
+--
+
+&lt;img src="slides_files/figure-html/fwer-curve-1.png" style="display: block; margin: auto;" /&gt;
+
+At `\(m = 20\)` subgroups: FWER = 64%. You are **almost guaranteed** a false positive.
+
+---
+
+# Simulation: 20 A/A Tests
+
+No treatment effect. Run 20 tests. Repeat 1,000 times.
+
+&lt;img src="slides_files/figure-html/twenty-aa-1.png" style="display: block; margin: auto;" /&gt;
+
+--
+
+.highlight-box[
+**The garden of forking paths:** every time you check "does it work for men? for women? for iOS? for Android? on weekdays? ...", you are running another test. The more paths you explore, the more likely you find something spurious.
+]
+
+---
+
+# Fix 1: Bonferroni Correction
+
+.blue-box[
+**Bonferroni:** test each hypothesis at `\(\alpha / m\)` instead of `\(\alpha\)`.
+]
+
+--
+
+If you test `\(m = 20\)` hypotheses, use `\(\alpha^* = 0.05 / 20 = 0.0025\)`.
+
+--
+
+**Pros:**
+- Simple. Easy to explain.
+- Controls FWER at `\(\alpha\)` regardless of dependence between tests.
+
+**Cons:**
+- Very conservative, especially for large `\(m\)`.
+- Power drops dramatically: you need much larger effects to survive.
+
+--
+
+.small[
+
+```r
+p_values &lt;- c(0.001, 0.013, 0.044, 0.22, 0.89)
+p.adjust(p_values, method = "bonferroni")
+```
+
+```
+## [1] 0.005 0.065 0.220 1.000 1.000
+```
+]
+
+Only the first survives at `\(\alpha = 0.05\)` after Bonferroni.
+
+---
+
+# Fix 2: Holm's Step-Down Procedure
+
+.blue-box[
+**Holm (1979):** Sort p-values smallest to largest. Test the `\(k\)`-th smallest against `\(\alpha / (m - k + 1)\)`. Stop at the first non-rejection.
+]
+
+--
+
+.small[
+
+```r
+p_values &lt;- c(0.001, 0.013, 0.044, 0.22, 0.89)
+tibble(
+  original = p_values,
+  bonferroni = p.adjust(p_values, method = "bonferroni"),
+  holm = p.adjust(p_values, method = "holm")
+) |&gt; knitr::kable(digits = 4)
+```
+
+
+
+| original| bonferroni|  holm|
+|--------:|----------:|-----:|
+|    0.001|      0.005| 0.005|
+|    0.013|      0.065| 0.052|
+|    0.044|      0.220| 0.132|
+|    0.220|      1.000| 0.440|
+|    0.890|      1.000| 0.890|
+]
+
+--
+
+Holm is **uniformly more powerful** than Bonferroni and still controls FWER. There is no reason to use Bonferroni over Holm.
+
+---
+
+# Fix 3: Benjamini-Hochberg (FDR Control)
+
+.blue-box[
+**Key idea:** Instead of controlling the probability of **any** false positive (FWER), control the expected **proportion** of false positives among rejections: the **False Discovery Rate (FDR)**.
+]
+
+--
+
+`$$\text{FDR} = E\left[\frac{\text{# false positives}}{\text{# rejections}}\right]$$`
+
+--
+
+**BH procedure:** Sort p-values. Reject hypothesis `\(k\)` if `\(p_{(k)} \le \frac{k}{m} \cdot \alpha\)`.
+
+--
+
+.small[
+
+```r
+p_values &lt;- c(0.001, 0.013, 0.044, 0.22, 0.89)
+tibble(
+  original = p_values,
+  holm = p.adjust(p_values, method = "holm"),
+  BH = p.adjust(p_values, method = "BH")
+) |&gt; knitr::kable(digits = 4)
+```
+
+
+
+| original|  holm|     BH|
+|--------:|-----:|------:|
+|    0.001| 0.005| 0.0050|
+|    0.013| 0.052| 0.0325|
+|    0.044| 0.132| 0.0733|
+|    0.220| 0.440| 0.2750|
+|    0.890| 0.890| 0.8900|
+]
+
+BH is **much less conservative** than Holm/Bonferroni. Two hypotheses survive instead of one.
+
+---
+
+# When to Use Which?
+
+| Method | Controls | Conservative? | Use when... |
+|--------|----------|---------------|-------------|
+| **Bonferroni** | FWER | Very | Quick back-of-envelope, or `\(m\)` is small |
+| **Holm** | FWER | Less | You want FWER control (always prefer over Bonferroni) |
+| **BH** | FDR | Least | You can tolerate some false positives (screening, exploration) |
+
+--
+
+.highlight-box[
+**Interview framing:** "We tested 20 segments. Three were significant at `\(p &lt; 0.05\)`. Are they real?" Answer: probably not without correction. Use Holm if you need to be conservative (e.g., launch decision for one specific feature). Use BH if you're screening for promising segments to investigate further.
+]
+
+---
+
+# Application: Online Ads
+
+
+|Creative | True effect| Estimate|  Raw p| BH adj. p| Holm adj. p|
+|:--------|-----------:|--------:|------:|---------:|-----------:|
+|Ad 1     |       0.003|   0.0027| 0.0002|    0.0017|      0.0017|
+|Ad 2     |       0.002|   0.0021| 0.0031|    0.0154|      0.0277|
+|Ad 3     |       0.000|  -0.0002| 0.7898|    0.8775|      1.0000|
+|Ad 4     |       0.000|   0.0002| 0.7562|    0.8775|      1.0000|
+|Ad 5     |       0.000|  -0.0011| 0.1031|    0.2319|      0.7217|
+|Ad 6     |       0.000|  -0.0008| 0.2537|    0.4228|      1.0000|
+|Ad 7     |       0.000|   0.0003| 0.6342|    0.8775|      1.0000|
+|Ad 8     |       0.000|   0.0011| 0.1159|    0.2319|      0.7217|
+|Ad 9     |       0.000|   0.0013| 0.0736|    0.2319|      0.5888|
+|Ad 10    |       0.000|   0.0001| 0.9131|    0.9131|      1.0000|
+
+--
+
+With 10 creatives tested, raw p-values can mislead. BH helps find the real winners while controlling the false discovery rate.
+
+---
+
+# Pre-Specified vs Exploratory Subgroups
+
+.pull-left[
+**Pre-specified** (in the analysis plan):
+- "We will test whether the effect differs by driver tenure (&lt; 1 yr vs &gt;= 1 yr)"
+- Correction burden is **limited** to the number of pre-specified tests
+- Much more credible
+
+**The rule:** if you pre-specify, you can test. But you still need to correct for however many pre-specified tests you have.
+]
+
+.pull-right[
+**Exploratory** (data-driven):
+- "We found the effect is huge for left-handed drivers in Portland on Tuesdays!"
+- Correction burden is **unknown** (how many things did you look at?)
+- Needs replication to be credible
+
+**The rule:** label these as exploratory. Use them to generate hypotheses for a follow-up experiment.
+]
+
+--
+
+.highlight-box[
+**Interview tip:** When someone presents a surprising subgroup result, ask: "Was this pre-specified?" If not, treat it as hypothesis-generating, not evidence.
+]
+
+---
+
+# Interaction Effects vs Subgroup-Specific Effects
+
+Two ways to look at heterogeneity:
+
+--
+
+.pull-left[
+**Subgroup-specific:** run the analysis separately in each group.
+
+
+|City type | Effect| p-value|
+|:---------|------:|-------:|
+|Suburban  | 0.9662|       0|
+|Urban     | 3.0022|       0|
+]
+
+.pull-right[
+**Interaction:** one regression, test for *difference* in effects.
+
+.small[
+
+```r
+mod &lt;- lm(y ~ treated * city_type, data = dat)
+coef(summary(mod))[4, ] |&gt;
+  round(4)
+```
+
+```
+##   Estimate Std. Error    t value   Pr(&gt;|t|) 
+##     2.0360     0.0891    22.8418     0.0000
+```
+]
+]
+
+--
+
+.highlight-box[
+**Classic mistake:** "The effect is significant in urban (p = 0.001) and not significant in suburban (p = 0.12), so the effect is different across city types." **Wrong.** You must test the *interaction*. "Significant" vs "not significant" is not itself a significant difference.
+]
+
+---
+
+# Application: Ride-Sharing Heterogeneity
+
+A ride-sharing platform tests a driver incentive program. Effect might differ by city type, driver tenure, and time of day.
+
+&lt;img src="slides_files/figure-html/rideshare-het-1.png" style="display: block; margin: auto;" /&gt;
+
+---
+
+# Ride-Sharing: After Correction
+
+&lt;img src="slides_files/figure-html/rideshare-correction-1.png" style="display: block; margin: auto;" /&gt;
+
+--
+
+.highlight-box[
+**Better approach:** Pre-specify the city-type interaction. Test tenure and peak as exploratory. Report both raw and adjusted p-values.
+]
+
+---
+
+# The Garden of Forking Paths
+
+.pull-left[
+Researcher degrees of freedom include:
+
+1. Which outcome to focus on
+2. Which subgroups to analyze
+3. Which covariates to include
+4. How to define the treatment window
+5. Whether to drop outliers
+6. Which functional form to use
+7. How to handle missing data
+
+Each choice is a "fork." With enough forks, you can find significance **even when there is no effect**.
+]
+
+.pull-right[
+&lt;img src="slides_files/figure-html/forking-paths-1.png" style="display: block; margin: auto;" /&gt;
+]
+
+---
+
+# Pre-Analysis Plans: The Antidote
+
+.blue-box[
+**Pre-analysis plan (PAP):** A document written *before looking at the data* that specifies:
+- Primary outcome(s)
+- Primary hypothesis tests
+- Pre-specified subgroup analyses
+- How multiple testing will be handled
+- Rules for outliers, missing data, functional form
+]
+
+--
+
+**What a PAP does:**
+- Limits the number of "forks" → reduces the correction burden
+- Makes the distinction between confirmatory and exploratory analysis transparent
+- Does NOT prevent exploratory analysis — it just labels it honestly
+
+--
+
+.highlight-box[
+**Interview framing:** "We pre-specified one primary metric (conversion rate) and two subgroups (new vs returning users). We'll use Holm correction for these three tests. Any additional subgroup findings are exploratory and labeled as such."
+]
+
+---
+
+# Summary: Decision Framework
+
+&lt;img src="slides_files/figure-html/decision-tree-1.png" style="display: block; margin: auto;" /&gt;
+
+--
+
+.highlight-box[
+**Key principle:** the correction should match the **actual number of tests you could have run**, not the number you chose to report. Pre-analysis plans make that number explicit and small.
+]
+
+---
+
+# Key Takeaways
+
+1. Testing `\(m\)` hypotheses at `\(\alpha = 0.05\)` gives FWER `\(= 1 - 0.95^m\)`. At `\(m = 20\)`, you have a 64% chance of a false positive.
+
+2. **Bonferroni** is simple but overly conservative. **Holm** dominates it. **BH** controls FDR instead of FWER and is best for screening.
+
+3. **"Significant in group A, not in group B"** does not mean the effect differs. Test the **interaction**.
+
+4. **Pre-specified** subgroups are credible (with correction). **Exploratory** subgroups are hypothesis-generating only.
+
+5. The **garden of forking paths** means even honest researchers can find spurious results. Pre-analysis plans are the antidote.
+
+6. In practice: pre-specify your primary metric and a small number of subgroups. Apply Holm. Report everything else as exploratory.
+
+---
+
+# Exercise Preview
+
+In the exercise (`exercise.R`) you will:
+
+1. Simulate 20 A/A tests and observe false positive inflation
+2. Apply Bonferroni, Holm, and BH corrections and compare
+3. Simulate a real effect in one subgroup among 20, show that it survives BH but might not survive Bonferroni
+4. Demonstrate the "significant vs not significant" fallacy with the interaction test
+5. Pre-register one subgroup analysis and show it survives correction
+
+See `exercise.R` for the starter code.
+
+---
+class: center, middle, inverse
+
+# Backup Slides
+
+---
+name: bonferroni-proof
+
+# Backup: Why Bonferroni Controls FWER
+
+**Claim:** If we test `\(m\)` hypotheses each at `\(\alpha/m\)`, the FWER `\(\le \alpha\)`.
+
+--
+
+**Proof (Boole's inequality / union bound):**
+
+Let `\(A_k\)` be the event "reject null hypothesis `\(k\)` when it is true" (a false positive for test `\(k\)`).
+
+`$$P(\text{at least one false positive}) = P\left(\bigcup_{k=1}^{m_0} A_k\right) \le \sum_{k=1}^{m_0} P(A_k) = m_0 \cdot \frac{\alpha}{m} \le m \cdot \frac{\alpha}{m} = \alpha$$`
+
+where `\(m_0 \le m\)` is the number of true nulls.
+
+--
+
+This holds **regardless of the dependence structure** among tests, which is why Bonferroni is so conservative when tests are positively correlated (as they often are with overlapping subgroups).
+
+---
+name: bh-procedure
+
+# Backup: BH Procedure Step by Step
+
+Given `\(m\)` p-values `\(p_1, \ldots, p_m\)`:
+
+1. Sort them: `\(p_{(1)} \le p_{(2)} \le \cdots \le p_{(m)}\)`
+
+2. Find the largest `\(k\)` such that `\(p_{(k)} \le \frac{k}{m} \cdot \alpha\)`
+
+3. Reject all hypotheses `\(H_{(1)}, \ldots, H_{(k)}\)`
+
+--
+
+**Example** with `\(m = 5\)`, `\(\alpha = 0.05\)`:
+
+| Rank `\(k\)` | `\(p_{(k)}\)` | BH threshold `\(\frac{k}{5} \cdot 0.05\)` | Reject? |
+|-----------|-----------|----------------------------------------|---------|
+| 1 | 0.001 | 0.010 | Yes |
+| 2 | 0.013 | 0.020 | Yes |
+| 3 | 0.044 | 0.030 | No (largest `\(k\)` with `\(p \le\)` threshold is 2) |
+| 4 | 0.220 | 0.040 | No |
+| 5 | 0.890 | 0.050 | No |
+
+--
+
+**Theorem (Benjamini &amp; Hochberg, 1995):** Under independence (or positive dependence), this procedure controls `\(\text{FDR} \le \alpha\)`.
+
+---
+name: holm-procedure
+
+# Backup: Holm's Step-Down Procedure
+
+Given `\(m\)` p-values sorted as `\(p_{(1)} \le \cdots \le p_{(m)}\)`:
+
+1. Test `\(p_{(1)}\)` against `\(\alpha / m\)`. If rejected, continue.
+2. Test `\(p_{(2)}\)` against `\(\alpha / (m-1)\)`. If rejected, continue.
+3. ...
+4. Test `\(p_{(k)}\)` against `\(\alpha / (m - k + 1)\)`. **Stop** at first non-rejection.
+
+--
+
+**Why it is more powerful than Bonferroni:**
+
+- Bonferroni uses the threshold `\(\alpha/m\)` for **all** tests.
+- Holm uses `\(\alpha/m\)` only for the smallest p-value, then progressively relaxes: `\(\alpha/(m-1)\)`, `\(\alpha/(m-2)\)`, etc.
+- Since the thresholds are weakly larger for all but the first test, Holm rejects at least as many hypotheses as Bonferroni.
+- Holm still controls FWER (proved via a closed testing argument).
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false,
+"ratio": "16:9"
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+// add `data-at-shortcutkeys` attribute to <body> to resolve conflicts with JAWS
+// screen reader (see PR #262)
+(function(d) {
+  let res = {};
+  d.querySelectorAll('.remark-help-content table tr').forEach(tr => {
+    const t = tr.querySelector('td:nth-child(2)').innerText;
+    tr.querySelectorAll('td:first-child .key').forEach(key => {
+      const k = key.innerText;
+      if (/^[a-z]$/.test(k)) res[k] = t;  // must be a single letter (key)
+    });
+  });
+  d.body.setAttribute('data-at-shortcutkeys', JSON.stringify(res));
+})(document);
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

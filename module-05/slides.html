@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Module 5: Analyzing Experiments</title>
+    <meta charset="utf-8" />
+    <script src="slides_files/header-attrs-2.29/header-attrs.js"></script>
+    <link href="slides_files/remark-css-0.0.1/default.css" rel="stylesheet" />
+    <link href="slides_files/remark-css-0.0.1/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+.title[
+# Module 5: Analyzing Experiments
+]
+.subtitle[
+## From Difference in Means to CUPED, ITT, and LATE
+]
+
+---
+
+
+&lt;style type="text/css"&gt;
+.remark-code, .remark-inline-code { font-size: 80%; }
+.remark-slide-content { padding: 1em 2em; }
+.small { font-size: 80%; }
+.tiny { font-size: 65%; }
+.highlight-box {
+  background: #fff3e0;
+  border-left: 4px solid #e65100;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+.blue-box {
+  background: #e3f2fd;
+  border-left: 4px solid #1565c0;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+&lt;/style&gt;
+
+
+
+# Course Map
+
+&lt;table&gt;
+&lt;tr&gt;&lt;th&gt;#&lt;/th&gt;&lt;th&gt;Module&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;1&lt;/td&gt;&lt;td&gt;The Experimental Ideal&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;2&lt;/td&gt;&lt;td&gt;SUTVA and When It Breaks&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;3&lt;/td&gt;&lt;td&gt;Designing Around Interference&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;4&lt;/td&gt;&lt;td&gt;Power and Sample Size&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;b&gt;5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;&lt;b&gt;Analyzing Experiments&lt;/b&gt; &lt;i&gt;(you are here)&lt;/i&gt;&lt;/td&gt;&lt;td&gt;current&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;6&lt;/td&gt;&lt;td&gt;Multiple Testing &amp; Subgroups&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;7&lt;/td&gt;&lt;td&gt;External Validity&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;8&lt;/td&gt;&lt;td&gt;Advanced Topics&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+
+---
+
+# Start Simple: Difference in Means
+
+A ride-sharing company tests a $50 driver bonus. 2,000 drivers randomized equally.
+
+
+```r
+n &lt;- 2000
+drivers &lt;- tibble(
+  id = 1:n,
+  pre_trips = rpois(n, lambda = 30),  # pre-treatment trips
+  bonus = rep(c(0, 1), each = n / 2),
+  # True effect: 3 extra trips. Noisy outcome correlated with pre_trips.
+  post_trips = pre_trips + 3 * bonus + rnorm(n, sd = 12)
+)
+```
+
+--
+
+
+```r
+mean(drivers$post_trips[drivers$bonus == 1]) -
+  mean(drivers$post_trips[drivers$bonus == 0])
+```
+
+```
+## [1] 2.312819
+```
+
+--
+
+This is unbiased for the ATE. But the standard error is large because `post_trips` is noisy.
+
+---
+
+# Regression: Same Thing, More Flexible
+
+
+```r
+fit_simple &lt;- lm(post_trips ~ bonus, data = drivers)
+summary(fit_simple)$coefficients |&gt; round(3)
+```
+
+```
+##             Estimate Std. Error t value Pr(&gt;|t|)
+## (Intercept)   30.019      0.420  71.476        0
+## bonus          2.313      0.594   3.894        0
+```
+
+--
+
+The coefficient on `bonus` is identical to the difference in means.
+
+--
+
+.blue-box[
+**Key fact:** In a randomized experiment with no covariates, OLS regression of `\(Y\)` on `\(D\)` gives exactly the difference in means. The regression framework just makes it easier to add covariates and compute standard errors.
+]
+
+---
+
+# Adding Covariates: Why and How
+
+Pre-treatment trips (`pre_trips`) predict post-treatment trips. Adding it as a covariate reduces residual variance:
+
+
+```r
+fit_covar &lt;- lm(post_trips ~ bonus + pre_trips, data = drivers)
+summary(fit_covar)$coefficients |&gt; round(3)
+```
+
+```
+##             Estimate Std. Error t value Pr(&gt;|t|)
+## (Intercept)    0.479      1.530   0.313    0.754
+## bonus          2.406      0.543   4.435    0.000
+## pre_trips      0.984      0.049  19.951    0.000
+```
+
+--
+
+.pull-left[
+**Without covariate:**
+
+```
+## SE(bonus): 0.594
+```
+]
+
+.pull-right[
+**With covariate:**
+
+```
+## SE(bonus): 0.543
+```
+]
+
+--
+
+.highlight-box[
+The standard error dropped substantially. Same data, same experiment, but a **tighter** estimate -- just by using information we already had.
+]
+
+---
+
+# Lin (2013): Covariate Adjustment Done Right
+
+Simply adding covariates to a regression can be slightly wrong when treatment effects are heterogeneous. Lin (2013) showed the right way:
+
+--
+
+.blue-box[
+**Lin's estimator:** Interact the (demeaned) covariate with treatment:
+
+`$$Y_i = \alpha + \tau D_i + \beta (X_i - \bar{X}) + \gamma D_i (X_i - \bar{X}) + \varepsilon_i$$`
+
+This is **always** at least as precise as the simple difference in means, regardless of whether the covariate matters.
+]
+
+--
+
+.small[
+
+```r
+drivers &lt;- drivers |&gt; mutate(pre_trips_dm = pre_trips - mean(pre_trips))
+fit_lin &lt;- lm(post_trips ~ bonus * pre_trips_dm, data = drivers)
+summary(fit_lin)$coefficients |&gt; round(3)
+```
+
+```
+##                    Estimate Std. Error t value Pr(&gt;|t|)
+## (Intercept)          29.973      0.384  78.114     0.00
+## bonus                 2.406      0.543   4.435     0.00
+## pre_trips_dm          0.975      0.067  14.598     0.00
+## bonus:pre_trips_dm    0.019      0.099   0.190     0.85
+```
+]
+
+The treatment effect estimate is the coefficient on `bonus`.
+
+---
+
+# CUPED: Variance Reduction Using Pre-Experiment Data
+
+.blue-box[
+**CUPED** (Controlled-experiment Using Pre-Experiment Data): Use the pre-treatment outcome to reduce variance of the treatment effect estimate. Widely used at Microsoft, Netflix, and other tech companies.
+]
+
+--
+
+The idea: construct a variance-reduced outcome:
+
+`$$\tilde{Y}_i = Y_i - \theta (X_i - \bar{X})$$`
+
+where `\(X_i\)` is the pre-treatment outcome and `\(\theta = \frac{\text{Cov}(Y, X)}{\text{Var}(X)}\)`.
+
+--
+
+
+```r
+theta &lt;- cov(drivers$post_trips, drivers$pre_trips) / var(drivers$pre_trips)
+drivers &lt;- drivers |&gt;
+  mutate(y_cuped = post_trips - theta * (pre_trips - mean(pre_trips)))
+
+# Compare variance
+cat("Var(post_trips):", round(var(drivers$post_trips), 1), "\n")
+```
+
+```
+## Var(post_trips): 177.6
+```
+
+```r
+cat("Var(y_cuped):   ", round(var(drivers$y_cuped), 1), "\n")
+```
+
+```
+## Var(y_cuped):    148.4
+```
+
+```r
+cat("Variance reduction:", round(1 - var(drivers$y_cuped)/var(drivers$post_trips), 3))
+```
+
+```
+## Variance reduction: 0.164
+```
+
+---
+
+# CUPED = Regression (It's the Same Thing)
+
+
+```r
+# CUPED estimate
+cuped_est &lt;- mean(drivers$y_cuped[drivers$bonus == 1]) -
+             mean(drivers$y_cuped[drivers$bonus == 0])
+
+# Regression with covariate
+reg_est &lt;- coef(fit_covar)["bonus"]
+
+cat("CUPED estimate:     ", round(cuped_est, 3), "\n")
+```
+
+```
+## CUPED estimate:      2.406
+```
+
+```r
+cat("Regression estimate:", round(reg_est, 3), "\n")
+```
+
+```
+## Regression estimate: 2.406
+```
+
+--
+
+.highlight-box[
+**CUPED is just regression adjustment repackaged.** The optimal `\(\theta\)` is the OLS coefficient of `\(Y\)` on `\(X\)`. The CUPED-adjusted difference in means equals the regression coefficient on treatment.
+
+Why use CUPED framing? It's easier to implement in production pipelines (you transform the metric once, then compute simple means).
+]
+
+---
+
+# Simulation: CUPED Variance Reduction
+
+&lt;img src="slides_files/figure-html/cuped-sim-1.png" style="display: block; margin: auto;" /&gt;
+
+Both centered on the truth, but CUPED has a much narrower spread.
+
+---
+
+# Stratification and Post-Stratification
+
+**Stratified randomization:** Randomize *within* blocks defined by important covariates. Guarantees exact balance.
+
+--
+
+
+```r
+# Stratify by pre_trips tercile
+drivers_strat &lt;- drivers |&gt;
+  mutate(stratum = ntile(pre_trips, 3),
+         bonus_strat = ave(1:n(), stratum, FUN = function(x)
+           sample(rep(c(0, 1), length.out = length(x)))))
+
+# Post-stratification: add stratum fixed effects
+fit_strat &lt;- lm(post_trips ~ bonus + factor(stratum), data = drivers_strat)
+summary(fit_strat)$coefficients[1:2, ] |&gt; round(3)
+```
+
+```
+##             Estimate Std. Error t value Pr(&gt;|t|)
+## (Intercept)   24.378      0.548  44.501        0
+## bonus          2.062      0.551   3.745        0
+```
+
+--
+
+.highlight-box[
+**Post-stratification** adjusts for strata after the fact (even if randomization wasn't stratified). It's a free variance reduction -- always include randomization strata as fixed effects.
+]
+
+---
+
+# Robust Standard Errors
+
+OLS standard errors assume homoskedasticity. In experiments, we should use **heteroskedasticity-robust** (HC) standard errors.
+
+--
+
+.small[
+
+```r
+# HC2 standard errors (recommended for experiments)
+# Using the sandwich formula manually:
+X &lt;- model.matrix(fit_covar)
+e &lt;- residuals(fit_covar)
+hat_vals &lt;- hatvalues(fit_covar)
+meat &lt;- t(X) %*% diag(e^2 / (1 - hat_vals)) %*% X
+bread &lt;- solve(t(X) %*% X)
+vcov_hc2 &lt;- bread %*% meat %*% bread
+se_hc2 &lt;- sqrt(diag(vcov_hc2))
+
+cat("OLS SE: ", round(summary(fit_covar)$coefficients[2, 2], 3), "\n")
+```
+
+```
+## OLS SE:  0.543
+```
+
+```r
+cat("HC2 SE: ", round(se_hc2[2], 3), "\n")
+```
+
+```
+## HC2 SE:  0.542
+```
+]
+
+--
+
+For **cluster-randomized** designs, cluster the standard errors at the level of randomization:
+
+.small[
+
+```r
+# If randomized at city level:
+# lm(y ~ treatment, data = df) with cluster-robust SEs at city level
+# Or use fixest::feols(y ~ treatment, cluster = ~city, data = df)
+```
+]
+
+---
+
+# ITT vs LATE: Non-Compliance
+
+Not everyone assigned to treatment actually takes the treatment.
+
+
+```r
+n &lt;- 2000
+experiment &lt;- tibble(
+  id = 1:n,
+  assigned = rep(c(0, 1), each = n / 2),
+  # 70% compliance: only 70% of those assigned to bonus actually use it
+  complied = if_else(assigned == 1, rbinom(n, 1, prob = 0.70), 0L),
+  # Effect only for compliers: 5 extra trips
+  post_trips = rpois(n, lambda = 30) + 5 * complied + rnorm(n, sd = 8)
+)
+```
+
+--
+
+.pull-left[
+**ITT** (Intent-to-Treat):
+
+```r
+itt &lt;- mean(experiment$post_trips[experiment$assigned == 1]) -
+       mean(experiment$post_trips[experiment$assigned == 0])
+cat("ITT:", round(itt, 2))
+```
+
+```
+## ITT: 3.48
+```
+]
+
+.pull-right[
+**LATE** (Local Average Treatment Effect):
+
+```r
+compliance_rate &lt;- mean(experiment$complied[experiment$assigned == 1])
+late &lt;- itt / compliance_rate
+cat("LATE:", round(late, 2), "\n")
+```
+
+```
+## LATE: 5.07
+```
+
+```r
+cat("Compliance:", round(compliance_rate, 2))
+```
+
+```
+## Compliance: 0.69
+```
+]
+
+---
+
+# ITT vs LATE: What to Report?
+
+.blue-box[
+**ITT** = effect of *assigning* treatment. Always identified by randomization. This is the policy-relevant effect: "what happens if we offer this to everyone?"
+
+**LATE** = effect of *taking* treatment on compliers. Requires additional assumptions (monotonicity, exclusion restriction). This is the "efficacy" effect.
+]
+
+--
+
+
+|Estimand                  | Estimate|Issue                            |
+|:-------------------------|--------:|:--------------------------------|
+|ITT (OLS on assignment)   |     3.48|Diluted by non-compliance        |
+|LATE (IV / Wald)          |     5.07|Accounts for non-compliance      |
+|Naive (OLS on compliance) |     5.01|BIASED: compliance is endogenous |
+
+--
+
+.highlight-box[
+**Never** regress on actual treatment take-up -- it's endogenous. Use assignment as an instrument (2SLS) to get LATE, or report ITT.
+]
+
+---
+
+# Application: Ride-Sharing Driver Bonus with CUPED
+
+&lt;img src="slides_files/figure-html/rideshare-cuped-1.png" style="display: block; margin: auto;" /&gt;
+
+---
+
+# Application: DiD for Pre/Post Intervention
+
+Simulated academic reporting experiment: 200 studies, 4 treatment arms (T0-T3), measure hypothesis reporting rates before and after intervention.
+
+.small[
+
+```r
+n_studies &lt;- 200
+studies &lt;- tibble(
+  study_id = 1:n_studies,
+  has_pap = rbinom(n_studies, 1, 0.4),
+  arm = sample(rep(c("T0", "T1", "T2", "T3"), each = n_studies / 4)),
+  # Pre-period: ~42% of hypotheses reported on average
+  y_pre = rbeta(n_studies, shape1 = 3, shape2 = 4),
+  # Post-period: T0 no change, T1-T3 increase reporting
+  effect = case_when(
+    arm == "T0" ~ 0,
+    arm == "T1" ~ 0.03,
+    arm == "T2" ~ 0.06,
+    arm == "T3" ~ 0.10
+  ),
+  y_post = pmin(1, y_pre + effect + rnorm(n_studies, sd = 0.08))
+)
+```
+]
+
+---
+
+# DiD: Estimating Treatment Effects
+
+
+```r
+# Reshape to panel
+panel &lt;- studies |&gt;
+  pivot_longer(cols = c(y_pre, y_post), names_to = "period",
+               values_to = "y_report", names_prefix = "y_") |&gt;
+  mutate(post = if_else(period == "post", 1, 0))
+
+# DiD regression with study fixed effects
+fit_did &lt;- lm(y_report ~ factor(study_id) + post:factor(arm), data = panel)
+
+# Extract treatment effects (post x arm interactions)
+did_coefs &lt;- coef(fit_did)
+treat_effects &lt;- did_coefs[grep("post:factor\\(arm\\)", names(did_coefs))]
+names(treat_effects) &lt;- c("T1 vs T0", "T2 vs T0", "T3 vs T0")
+round(treat_effects, 3)
+```
+
+```
+## T1 vs T0 T2 vs T0 T3 vs T0     &lt;NA&gt; 
+##    0.009    0.035    0.059    0.118
+```
+
+--
+
+.highlight-box[
+**DiD** removes time-invariant study-level confounders. Each study is its own control. The identifying assumption: absent treatment, reporting rates would have changed equally across arms (parallel trends).
+]
+
+---
+
+# Pre-Analysis Plans
+
+.blue-box[
+**Pre-analysis plan (PAP):** A document specifying the analysis *before* seeing the data. Includes: primary outcomes, estimating equations, subgroup analyses, and how to handle complications.
+]
+
+--
+
+A good PAP specifies:
+
+1. **Primary outcome(s)** and how they're constructed
+2. **Estimating equation** (e.g., the DiD specification above)
+3. **Standard errors** (robust? clustered? at what level?)
+4. **Multiple testing** corrections (if applicable -- Module 6)
+5. **Subgroup analyses** (which ones are confirmatory vs. exploratory?)
+6. **Rules for deviations** (what do you do if compliance is lower than expected?)
+
+--
+
+.highlight-box[
+**Why PAPs matter:** Without pre-commitment, researchers (or product teams) can run dozens of specifications and report only the significant ones. A PAP distinguishes confirmatory from exploratory analysis.
+]
+
+---
+
+# Summary: The Analysis Toolkit
+
+| Method | When to Use | Key Benefit |
+|--------|------------|-------------|
+| Difference in means | Simplest case | Unbiased, transparent |
+| Regression + covariates | Pre-treatment predictors available | Variance reduction |
+| Lin (2013) | Heterogeneous effects possible | Robust to misspecification |
+| CUPED | Pre-treatment outcome available | Large variance reduction |
+| Stratification FEs | Stratified randomization | Uses design information |
+| HC2 standard errors | Always (in experiments) | Robust to heteroskedasticity |
+| Cluster-robust SEs | Cluster randomization | Correct inference |
+| ITT | Non-compliance present | Always identified |
+| LATE / IV | Want "efficacy" effect | Handles non-compliance |
+| DiD | Panel data (pre/post) | Controls for time-invariant confounders |
+
+---
+
+# Key Takeaways
+
+1. **Difference in means** is the foundation. Regression gives the same answer but scales to covariates.
+
+2. **Covariate adjustment** (Lin 2013, CUPED) reduces variance without introducing bias. Always use pre-treatment data when available.
+
+3. **CUPED is regression.** The `\(\theta\)` is just the OLS coefficient. CUPED is a convenient production implementation.
+
+4. **Robust SEs** (HC2) should be standard. Cluster at the level of randomization.
+
+5. **ITT vs LATE:** Report ITT as the primary result. Use IV for LATE when compliance matters. Never naively regress on take-up.
+
+6. **Pre-analysis plans** separate confirmatory from exploratory analysis. They protect you from yourself.
+
+---
+
+# Exercise Preview
+
+In the exercise you will:
+
+1. Implement CUPED from scratch and verify it matches regression
+2. Compare precision with and without covariate adjustment across 1,000 simulations
+3. Implement Lin's (2013) estimator and compare to naive covariate adjustment
+4. Estimate ITT and LATE with simulated non-compliance data
+5. Run a DiD specification on simulated panel data
+
+See `exercise.R` for the starter code.
+
+---
+class: center, middle, inverse
+
+# Backup Slides
+
+---
+name: cuped-derivation
+
+# Backup: CUPED Derivation
+
+We want to estimate `\(\tau = E[Y(1)] - E[Y(0)]\)` with minimum variance.
+
+**Step 1:** Define a new random variable:
+`$$\tilde{Y}_i = Y_i - \theta(X_i - E[X])$$`
+
+where `\(X_i\)` is a pre-treatment covariate (e.g., last period's outcome).
+
+--
+
+**Step 2:** The variance of the difference in means of `\(\tilde{Y}\)` is:
+`$$\text{Var}(\hat{\tau}_{\text{CUPED}}) = \text{Var}(\hat{\tau}_{\text{raw}}) + \theta^2 \text{Var}(\bar{X}_T - \bar{X}_C) - 2\theta \text{Cov}(\hat{\tau}_{\text{raw}}, \bar{X}_T - \bar{X}_C)$$`
+
+--
+
+**Step 3:** Minimize over `\(\theta\)`:
+`$$\theta^* = \frac{\text{Cov}(Y, X)}{\text{Var}(X)}$$`
+
+This is the OLS coefficient from regressing `\(Y\)` on `\(X\)` -- CUPED is regression.
+
+--
+
+**Step 4:** Variance reduction:
+`$$\frac{\text{Var}(\hat{\tau}_{\text{CUPED}})}{\text{Var}(\hat{\tau}_{\text{raw}})} = 1 - \text{Corr}(Y, X)^2$$`
+
+If `\(\text{Corr}(Y, X) = 0.7\)`, variance reduction = 51%.
+
+---
+name: lin-proof
+
+# Backup: Why Lin (2013) Works
+
+The standard covariate-adjusted estimator regresses `\(Y\)` on `\(D\)` and `\(X\)`:
+`$$Y_i = \alpha + \tau D_i + \beta X_i + \varepsilon_i$$`
+
+**Problem:** This constrains the coefficient on `\(X\)` to be the same in treatment and control groups. If the relationship between `\(X\)` and `\(Y\)` differs by treatment status, `\(\hat{\tau}\)` can be biased.
+
+--
+
+**Lin's fix:** Interact the demeaned covariate with treatment:
+`$$Y_i = \alpha + \tau D_i + \beta_0 \tilde{X}_i + \beta_1 D_i \tilde{X}_i + \varepsilon_i$$`
+where `\(\tilde{X}_i = X_i - \bar{X}\)`.
+
+--
+
+**Properties:**
+1. `\(\hat{\tau}\)` is consistent for the ATE regardless of the true data-generating process.
+2. `\(\hat{\tau}\)` is at least as precise as the unadjusted estimator (asymptotically).
+3. With HC2 standard errors, inference is valid even under heteroskedasticity.
+
+**Intuition:** Demeaning ensures the interaction term doesn't shift the intercept. The interaction allows different slopes in each group, avoiding functional form bias.
+
+---
+name: wald-estimator
+
+# Backup: The Wald Estimator (LATE)
+
+With one-sided non-compliance (only treatment group can take treatment):
+
+`$$\text{LATE} = \frac{\text{ITT}}{\text{compliance rate}} = \frac{E[Y | Z=1] - E[Y | Z=0]}{E[D | Z=1] - E[D | Z=0]}$$`
+
+--
+
+where `\(Z\)` = assignment, `\(D\)` = actual treatment take-up.
+
+This is equivalent to 2SLS with `\(Z\)` as an instrument for `\(D\)`.
+
+**Required assumptions:**
+1. **Relevance:** `\(Z\)` affects `\(D\)` (first stage is strong)
+2. **Independence:** `\(Z\)` is randomly assigned
+3. **Exclusion restriction:** `\(Z\)` affects `\(Y\)` only through `\(D\)`
+4. **Monotonicity:** No "defiers" (no one does the opposite of their assignment)
+
+Under these assumptions, LATE identifies the effect on **compliers** -- those who take treatment when assigned to it and don't when assigned to control.
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false,
+"ratio": "16:9"
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+// add `data-at-shortcutkeys` attribute to <body> to resolve conflicts with JAWS
+// screen reader (see PR #262)
+(function(d) {
+  let res = {};
+  d.querySelectorAll('.remark-help-content table tr').forEach(tr => {
+    const t = tr.querySelector('td:nth-child(2)').innerText;
+    tr.querySelectorAll('td:first-child .key').forEach(key => {
+      const k = key.innerText;
+      if (/^[a-z]$/.test(k)) res[k] = t;  // must be a single letter (key)
+    });
+  });
+  d.body.setAttribute('data-at-shortcutkeys', JSON.stringify(res));
+})(document);
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

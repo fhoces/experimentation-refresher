@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Module 7: External Validity &amp; Generalizability</title>
+    <meta charset="utf-8" />
+    <script src="slides_files/header-attrs-2.29/header-attrs.js"></script>
+    <link href="slides_files/remark-css-0.0.1/default.css" rel="stylesheet" />
+    <link href="slides_files/remark-css-0.0.1/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+.title[
+# Module 7: External Validity &amp; Generalizability
+]
+.subtitle[
+## Your Experiment Worked in SF. Will It Work in Lagos?
+]
+
+---
+
+
+&lt;style type="text/css"&gt;
+.remark-code, .remark-inline-code { font-size: 80%; }
+.remark-slide-content { padding: 1em 2em; }
+.small { font-size: 80%; }
+.tiny { font-size: 65%; }
+.highlight-box {
+  background: #fff3e0;
+  border-left: 4px solid #e65100;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+.blue-box {
+  background: #e3f2fd;
+  border-left: 4px solid #1565c0;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+&lt;/style&gt;
+
+
+
+# Course Map
+
+&lt;table&gt;
+&lt;tr&gt;&lt;th&gt;#&lt;/th&gt;&lt;th&gt;Module&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;1&lt;/td&gt;&lt;td&gt;The Experimental Ideal&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;2&lt;/td&gt;&lt;td&gt;SUTVA and When It Breaks&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;3&lt;/td&gt;&lt;td&gt;Designing Around Interference&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;4&lt;/td&gt;&lt;td&gt;Power and Sample Size&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;5&lt;/td&gt;&lt;td&gt;Analyzing Experiments&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;6&lt;/td&gt;&lt;td&gt;Multiple Testing &amp; Subgroups&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;b&gt;7&lt;/b&gt;&lt;/td&gt;&lt;td&gt;&lt;b&gt;External Validity &amp; Generalizability&lt;/b&gt; &lt;i&gt;(you are here)&lt;/i&gt;&lt;/td&gt;&lt;td&gt;current&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;8&lt;/td&gt;&lt;td&gt;Advanced Topics&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+
+---
+
+# The Setup: A Pricing Experiment in San Francisco
+
+A ride-sharing platform runs a pricing experiment in San Francisco. A 10% price cut increases rides by 15%.
+
+&lt;img src="slides_files/figure-html/sf-experiment-1.png" style="display: block; margin: auto;" /&gt;
+
+--
+
+The CEO asks: "Great, let's roll this out to all 50 cities." Should you?
+
+---
+
+# Internal vs External Validity
+
+.pull-left[
+.blue-box[
+**Internal validity:** Is the causal estimate correct *within the study*?
+- Randomization was done properly
+- No attrition, spillovers, or compliance issues
+- The estimated ATE is unbiased for the study population
+]
+]
+
+.pull-right[
+.blue-box[
+**External validity:** Does the effect generalize *beyond the study*?
+- To other populations (cities, countries)
+- To other time periods
+- To other implementations of the treatment
+- To other outcome measures
+]
+]
+
+--
+
+.highlight-box[
+**The tradeoff:** Lab experiments maximize internal validity (tight control) but may have low external validity (artificial setting). Field experiments in one site have high internal validity but limited external validity. Multi-site experiments trade some precision for generalizability.
+]
+
+---
+
+# Why SF Results Might Not Generalize
+
+&lt;img src="slides_files/figure-html/city-heterogeneity-1.png" style="display: block; margin: auto;" /&gt;
+
+--
+
+SF has high supply/demand ratio (lots of drivers). Lagos and Nairobi have low ratios (not enough drivers). A price cut in a supply-constrained market just generates unfulfilled demand.
+
+---
+
+# Site Selection Bias
+
+.blue-box[
+**Site selection bias:** The sites where experiments are run are not random samples of the target population. They are chosen for convenience, feasibility, or because the treatment is expected to work there.
+]
+
+--
+
+Common patterns:
+- Tech companies test in the US first (easiest market, most data)
+- Development RCTs often run in places with cooperative governments
+- Drug trials recruit from academic medical centers (not community clinics)
+
+--
+
+&lt;img src="slides_files/figure-html/site-selection-1.png" style="display: block; margin: auto;" /&gt;
+
+---
+
+# Heterogeneous Treatment Effects: The Key
+
+&lt;img src="slides_files/figure-html/hte-simulation-1.png" style="display: block; margin: auto;" /&gt;
+
+--
+
+.highlight-box[
+**If treatment effects are homogeneous** (same everywhere), external validity is free. The problem is entirely driven by **heterogeneous treatment effects** that correlate with site characteristics.
+]
+
+---
+
+# Transportability: The Formal Framework
+
+.blue-box[
+**Transportability** (Pearl &amp; Bareinboim, 2014): When can we use a causal effect estimated in population `\(A\)` to predict the effect in population `\(B\)`?
+]
+
+--
+
+**Intuition:** You can transport if:
+
+1. You know **which variables** moderate the treatment effect (effect modifiers)
+2. You can **measure** those variables in both populations
+3. You can **adjust** for differences in those variables
+
+--
+
+`$$\text{ATE}_B = \sum_x \text{CATE}(x) \cdot P_B(X = x)$$`
+
+Re-weight the site-specific conditional effects by the target population's covariate distribution.
+
+--
+
+.highlight-box[
+**In practice:** This requires knowing the effect modifiers. If you miss an important one, transportability fails. Domain knowledge is essential.
+]
+
+---
+
+# Transportability: Simulation
+
+&lt;img src="slides_files/figure-html/transport-sim-1.png" style="display: block; margin: auto;" /&gt;
+
+--
+
+Naive extrapolation from the source would overestimate the effect in the target by -0.7 units.
+
+---
+
+# Dose-Response and Mechanism
+
+.pull-left[
+**Why does it work?** matters more than **does it work?** for generalizability.
+
+If you understand the **mechanism**, you can predict *where* the treatment will work:
+
+- Price cut works because it shifts demand → only works if supply can absorb it
+- Driver bonus works because it increases effort → works wherever effort is elastic
+- A nudge works because it reduces friction → works wherever friction is the bottleneck
+]
+
+.pull-right[
+&lt;img src="slides_files/figure-html/dose-response-1.png" style="display: block; margin: auto;" /&gt;
+]
+
+--
+
+.highlight-box[
+**Interview tip:** "If you ran the experiment at one dose level, can you predict the effect at another?" Only if you have a model of the dose-response relationship. A binary experiment gives you one point on the curve.
+]
+
+---
+
+# Temporal Validity: Effects That Decay
+
+&lt;img src="slides_files/figure-html/novelty-effect-1.png" style="display: block; margin: auto;" /&gt;
+
+--
+
+.highlight-box[
+**Novelty effects in tech:** New features get attention because they are new. The 4-week A/B test shows a 4x larger effect than the steady state. Solution: run longer experiments, or model the decay curve.
+]
+
+---
+
+# Hawthorne and Demand Effects
+
+.pull-left[
+.blue-box[
+**Hawthorne effect:** People change behavior because they know they are being observed, not because of the treatment itself.
+]
+
+- Lab experiments are most susceptible
+- A/B tests where users don't know they're in an experiment are less susceptible
+- But surveys, feedback forms, and opt-in studies are vulnerable
+]
+
+.pull-right[
+.blue-box[
+**Demand effect:** Participants guess the hypothesis and behave accordingly (or contrarily).
+]
+
+- "I think they want me to click more ads, so I will"
+- Or: "I think they want me to click more, so I won't (reactance)"
+- Mitigated by: blinding, behavioral (not self-reported) outcomes, deception
+]
+
+--
+
+.highlight-box[
+**For tech interviews:** These are less of a concern in standard A/B tests (users don't know their assignment). But they matter for: employee experiments, opt-in trials, user research studies, and any experiment with self-reported outcomes.
+]
+
+---
+
+# Application: Ride-Sharing Across Cities
+
+&lt;img src="slides_files/figure-html/rideshare-cities-1.png" style="display: block; margin: auto;" /&gt;
+
+---
+
+# What Would Help Generalizability?
+
+**Strategy 1: Multi-site experiments**
+
+Run the experiment in 5-10 diverse cities, not just SF. Estimate site-specific effects and model the heterogeneity.
+
+--
+
+**Strategy 2: Identify effect modifiers**
+
+.small[
+
+```r
+# If we had multi-site data, we could model the heterogeneity
+cities_mod &lt;- lm(true_effect ~ supply_ratio, data = cities)
+cat("Effect per unit supply ratio:", round(coef(cities_mod)[2], 2), "\n")
+```
+
+```
+## Effect per unit supply ratio: 3.19
+```
+
+```r
+# Predict for a new city
+new_city &lt;- data.frame(supply_ratio = 0.35)
+cat("Predicted effect for city with supply ratio 0.35:",
+    round(predict(cities_mod, new_city), 2), "\n")
+```
+
+```
+## Predicted effect for city with supply ratio 0.35: 2.18
+```
+]
+
+--
+
+**Strategy 3: Understand the mechanism**
+
+Why do price cuts increase rides? If it is because supply is elastic (more drivers come online), then it won't work where supply is constrained. Test the mechanism, not just the outcome.
+
+---
+
+# Application: Do Research Results Generalize?
+
+&lt;img src="slides_files/figure-html/research-generalize-1.png" style="display: block; margin: auto;" /&gt;
+
+--
+
+Results from 2015-2017 studies may not generalize to today: different PAP norms, larger samples, different publication incentives. **Temporal external validity** is a concern.
+
+---
+
+# When Extrapolation Fails: A Simulation
+
+&lt;img src="slides_files/figure-html/extrapolation-fail-1.png" style="display: block; margin: auto;" /&gt;
+
+---
+
+# Strategies for Improving External Validity
+
+| Strategy | How it helps | Cost |
+|----------|-------------|------|
+| **Multi-site experiments** | Directly measures heterogeneity | Expensive, complex logistics |
+| **Stratified site selection** | Ensures diversity on key dimensions | Need to know the key dimensions |
+| **Effect modifier analysis** | Models why effects vary | Needs theory + data on moderators |
+| **Mechanism tests** | Predicts where treatment will work | Requires understanding of mechanism |
+| **Replication** | Confirms or refutes in new settings | Time, resources |
+| **Longer experiments** | Captures steady state, not novelty | Opportunity cost |
+
+--
+
+.highlight-box[
+**The meta-point:** External validity cannot be tested — only argued for. Internal validity can be designed in (randomization). External validity requires theory, multiple studies, and honest uncertainty about generalizability.
+]
+
+---
+
+# Key Takeaways
+
+1. **Internal validity** (is the estimate right?) and **external validity** (does it generalize?) are distinct. High internal validity does not imply high external validity.
+
+2. External validity fails when **treatment effects are heterogeneous** and the experimental population differs from the target population on the effect modifiers.
+
+3. **Site selection bias** is pervasive: experiments run in convenient or favorable locations overstate average effects.
+
+4. **Transportability** requires knowing the effect modifiers and adjusting for distributional differences. Without this knowledge, extrapolation is guesswork.
+
+5. **Novelty effects** and **Hawthorne effects** threaten temporal external validity. Short experiments may overstate long-run impacts.
+
+6. **Understanding the mechanism** is the most powerful tool for generalizability: *why* it works tells you *where* it will work.
+
+---
+
+# Exercise Preview
+
+In the exercise (`exercise.R`) you will:
+
+1. Simulate treatment effects that vary across 30 sites based on site characteristics
+2. Run an experiment in a biased subset of sites and show the estimate doesn't generalize
+3. Apply a transportability reweighting approach and show it recovers the target ATE
+4. Simulate novelty effects and show how experiment duration affects the estimate
+5. Compare multi-site vs single-site experimental designs
+
+See `exercise.R` for the starter code.
+
+---
+class: center, middle, inverse
+
+# Backup Slides
+
+---
+name: transport-formula
+
+# Backup: Transportability Formula
+
+**Setup:** Experiment in population `\(A\)`, target population `\(B\)`. Let `\(X\)` be observed effect modifiers.
+
+The ATE in `\(B\)` is:
+
+`$$\tau_B = E_B[Y(1) - Y(0)] = \sum_x E_A[Y(1) - Y(0) \mid X = x] \cdot P_B(X = x)$$`
+
+--
+
+**Assumptions required:**
+
+1. **Conditional exchangeability across populations:** `\(\tau(x) = E_A[Y(1) - Y(0) \mid X = x] = E_B[Y(1) - Y(0) \mid X = x]\)`
+
+2. **Positivity:** `\(P_A(X = x) &gt; 0\)` for all `\(x\)` with `\(P_B(X = x) &gt; 0\)`
+
+3. **Correct specification** of the effect modifier set `\(X\)`
+
+--
+
+**In practice:** Estimate `\(\hat{\tau}(x)\)` from the experimental data, then reweight:
+
+`$$\hat{\tau}_B = \frac{1}{n_B} \sum_{i \in B} \hat{\tau}(x_i)$$`
+
+This is analogous to survey reweighting / inverse probability weighting, but for treatment effects rather than means.
+
+---
+name: multisite-design
+
+# Backup: Multi-Site Experimental Design
+
+**Option 1: Same treatment, many sites**
+
+- Estimate site-specific effects `\(\hat{\tau}_s\)` for `\(s = 1, \ldots, S\)`
+- The overall ATE is a weighted average: `\(\hat{\tau} = \sum_s w_s \hat{\tau}_s\)`
+- Weights can be equal (average site effect) or proportional to site size (population ATE)
+- Key: report the **variance** of site-specific effects, not just the average
+
+--
+
+**Option 2: Vary the treatment across sites (factorial design)**
+
+- Different doses, implementations, or contexts
+- Allows estimation of dose-response curves
+- Requires more sites and/or larger samples
+
+--
+
+**Power consideration:**
+
+- With `\(S\)` sites, you have `\(S\)` "observations" for estimating heterogeneity
+- Individual-level `\(N\)` does not help with site-level inference
+- Rule of thumb: `\(S \ge 20\)` for meaningful heterogeneity analysis
+
+---
+name: novelty-modeling
+
+# Backup: Modeling Novelty / Decay Effects
+
+**Exponential decay model:**
+
+`$$\tau(t) = \tau_{\infty} + (\tau_0 - \tau_{\infty}) \cdot e^{-\lambda t}$$`
+
+where:
+- `\(\tau_0\)` = initial treatment effect (includes novelty)
+- `\(\tau_{\infty}\)` = long-run (steady state) treatment effect
+- `\(\lambda\)` = decay rate
+- `\(t\)` = time since treatment onset
+
+--
+
+**Estimation:** Run a long experiment (or multiple cohorts with staggered start). Estimate `\(\tau(t)\)` for each time period and fit the decay curve.
+
+**Practical note:** If `\(\tau_{\infty} = 0\)`, the treatment has no lasting effect. This is surprisingly common for UI changes, notifications, and other "attention-grabbing" interventions. A 4-week experiment cannot distinguish a slowly-decaying effect from a permanent one.
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false,
+"ratio": "16:9"
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+// add `data-at-shortcutkeys` attribute to <body> to resolve conflicts with JAWS
+// screen reader (see PR #262)
+(function(d) {
+  let res = {};
+  d.querySelectorAll('.remark-help-content table tr').forEach(tr => {
+    const t = tr.querySelector('td:nth-child(2)').innerText;
+    tr.querySelectorAll('td:first-child .key').forEach(key => {
+      const k = key.innerText;
+      if (/^[a-z]$/.test(k)) res[k] = t;  // must be a single letter (key)
+    });
+  });
+  d.body.setAttribute('data-at-shortcutkeys', JSON.stringify(res));
+})(document);
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

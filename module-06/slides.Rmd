@@ -1,0 +1,669 @@
+---
+title: "Module 6: Multiple Testing & Subgroups"
+subtitle: "Why 20 Subgroups Guarantee False Positives (and What to Do About It)"
+output:
+  xaringan::moon_reader:
+    css: [default, default-fonts]
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+      ratio: "16:9"
+---
+
+```{css, echo=FALSE}
+.remark-code, .remark-inline-code { font-size: 80%; }
+.remark-slide-content { padding: 1em 2em; }
+.small { font-size: 80%; }
+.tiny { font-size: 65%; }
+.highlight-box {
+  background: #fff3e0;
+  border-left: 4px solid #e65100;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+.blue-box {
+  background: #e3f2fd;
+  border-left: 4px solid #1565c0;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, fig.align = "center",
+  fig.width = 10, fig.height = 4.2, dpi = 150,
+  message = FALSE, warning = FALSE
+)
+library(tidyverse)
+theme_set(theme_minimal(base_size = 14))
+set.seed(42)
+```
+
+# Course Map
+
+<table>
+<tr><th>#</th><th>Module</th><th>Status</th></tr>
+<tr><td>1</td><td>The Experimental Ideal</td><td>done</td></tr>
+<tr><td>2</td><td>SUTVA and When It Breaks</td><td>done</td></tr>
+<tr><td>3</td><td>Designing Around Interference</td><td>done</td></tr>
+<tr><td>4</td><td>Power and Sample Size</td><td>done</td></tr>
+<tr><td>5</td><td>Analyzing Experiments</td><td>done</td></tr>
+<tr><td><b>6</b></td><td><b>Multiple Testing & Subgroups</b> <i>(you are here)</i></td><td>current</td></tr>
+<tr><td>7</td><td>External Validity</td><td>upcoming</td></tr>
+<tr><td>8</td><td>Advanced Topics</td><td>upcoming</td></tr>
+</table>
+
+---
+
+# The Setup: 10 Ad Creatives, 1 Winner?
+
+An online ads team tests 10 ad creatives against a control. **No creative is actually better** (true effect = 0 for all).
+
+```{r aa-ads, echo=FALSE, fig.height=3.5}
+n_per_arm <- 5000
+n_creatives <- 10
+
+sim_ads <- map_dfr(1:n_creatives, function(k) {
+  control <- rnorm(n_per_arm, mean = 0.02, sd = 0.05)
+  treatment <- rnorm(n_per_arm, mean = 0.02, sd = 0.05)  # same DGP!
+  test <- t.test(treatment, control)
+  tibble(creative = paste0("Ad ", k),
+         estimate = test$estimate[1] - test$estimate[2],
+         p_value = test$p.value,
+         significant = test$p.value < 0.05)
+})
+
+ggplot(sim_ads, aes(reorder(creative, -p_value), estimate,
+                     fill = significant)) +
+  geom_col(width = 0.6) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_manual(values = c("grey70", "firebrick"),
+                    labels = c("p >= 0.05", "p < 0.05")) +
+  coord_flip() +
+  labs(title = "10 A/A tests: no real effect, but some look 'significant'",
+       x = NULL, y = "Estimated effect on CTR", fill = NULL)
+```
+
+--
+
+With 10 tests at $\alpha = 0.05$, the probability of **at least one** false positive is $1 - (1-0.05)^{10} = `r round(1 - 0.95^10, 2)`$.
+
+---
+
+# The Multiple Comparisons Problem
+
+.blue-box[
+**Definition:** When you test $m$ hypotheses simultaneously, each at level $\alpha$, the probability of at least one false positive (the **family-wise error rate**, FWER) grows rapidly.
+]
+
+--
+
+$$\text{FWER} = 1 - (1 - \alpha)^m$$
+
+--
+
+```{r fwer-curve, echo=FALSE, fig.height=3}
+tibble(m = 1:50,
+       fwer = 1 - (1 - 0.05)^m) |>
+  ggplot(aes(m, fwer)) +
+  geom_line(linewidth = 1.2, color = "steelblue") +
+  geom_hline(yintercept = 0.05, linetype = "dashed", color = "firebrick") +
+  annotate("text", x = 40, y = 0.12, label = "Nominal alpha = 0.05",
+           color = "firebrick") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "FWER grows fast with the number of tests",
+       x = "Number of hypotheses tested (m)", y = "P(at least one false positive)")
+```
+
+At $m = 20$ subgroups: FWER = `r round(1 - 0.95^20, 2) * 100`%. You are **almost guaranteed** a false positive.
+
+---
+
+# Simulation: 20 A/A Tests
+
+No treatment effect. Run 20 tests. Repeat 1,000 times.
+
+```{r twenty-aa, echo=FALSE, fig.height=3.5}
+sim_aa <- function(iter) {
+  p_vals <- map_dbl(1:20, function(k) {
+    t.test(rnorm(500), rnorm(500))$p.value
+  })
+  sum(p_vals < 0.05)
+}
+
+aa_results <- tibble(
+  n_sig = map_dbl(1:1000, sim_aa)
+)
+
+ggplot(aa_results, aes(factor(n_sig))) +
+  geom_bar(fill = "steelblue", alpha = 0.8) +
+  labs(title = "1,000 simulations: how many of 20 null tests are 'significant'?",
+       subtitle = paste0("In ", round(mean(aa_results$n_sig >= 1) * 100),
+                         "% of simulations, at least one test is significant"),
+       x = "Number of false positives (out of 20)", y = "Count")
+```
+
+--
+
+.highlight-box[
+**The garden of forking paths:** every time you check "does it work for men? for women? for iOS? for Android? on weekdays? ...", you are running another test. The more paths you explore, the more likely you find something spurious.
+]
+
+---
+
+# Fix 1: Bonferroni Correction
+
+.blue-box[
+**Bonferroni:** test each hypothesis at $\alpha / m$ instead of $\alpha$.
+]
+
+--
+
+If you test $m = 20$ hypotheses, use $\alpha^* = 0.05 / 20 = 0.0025$.
+
+--
+
+**Pros:**
+- Simple. Easy to explain.
+- Controls FWER at $\alpha$ regardless of dependence between tests.
+
+**Cons:**
+- Very conservative, especially for large $m$.
+- Power drops dramatically: you need much larger effects to survive.
+
+--
+
+.small[
+```{r bonferroni-example}
+p_values <- c(0.001, 0.013, 0.044, 0.22, 0.89)
+p.adjust(p_values, method = "bonferroni")
+```
+]
+
+Only the first survives at $\alpha = 0.05$ after Bonferroni.
+
+---
+
+# Fix 2: Holm's Step-Down Procedure
+
+.blue-box[
+**Holm (1979):** Sort p-values smallest to largest. Test the $k$-th smallest against $\alpha / (m - k + 1)$. Stop at the first non-rejection.
+]
+
+--
+
+.small[
+```{r holm-example}
+p_values <- c(0.001, 0.013, 0.044, 0.22, 0.89)
+tibble(
+  original = p_values,
+  bonferroni = p.adjust(p_values, method = "bonferroni"),
+  holm = p.adjust(p_values, method = "holm")
+) |> knitr::kable(digits = 4)
+```
+]
+
+--
+
+Holm is **uniformly more powerful** than Bonferroni and still controls FWER. There is no reason to use Bonferroni over Holm.
+
+---
+
+# Fix 3: Benjamini-Hochberg (FDR Control)
+
+.blue-box[
+**Key idea:** Instead of controlling the probability of **any** false positive (FWER), control the expected **proportion** of false positives among rejections: the **False Discovery Rate (FDR)**.
+]
+
+--
+
+$$\text{FDR} = E\left[\frac{\text{# false positives}}{\text{# rejections}}\right]$$
+
+--
+
+**BH procedure:** Sort p-values. Reject hypothesis $k$ if $p_{(k)} \le \frac{k}{m} \cdot \alpha$.
+
+--
+
+.small[
+```{r bh-example}
+p_values <- c(0.001, 0.013, 0.044, 0.22, 0.89)
+tibble(
+  original = p_values,
+  holm = p.adjust(p_values, method = "holm"),
+  BH = p.adjust(p_values, method = "BH")
+) |> knitr::kable(digits = 4)
+```
+]
+
+BH is **much less conservative** than Holm/Bonferroni. Two hypotheses survive instead of one.
+
+---
+
+# When to Use Which?
+
+| Method | Controls | Conservative? | Use when... |
+|--------|----------|---------------|-------------|
+| **Bonferroni** | FWER | Very | Quick back-of-envelope, or $m$ is small |
+| **Holm** | FWER | Less | You want FWER control (always prefer over Bonferroni) |
+| **BH** | FDR | Least | You can tolerate some false positives (screening, exploration) |
+
+--
+
+.highlight-box[
+**Interview framing:** "We tested 20 segments. Three were significant at $p < 0.05$. Are they real?" Answer: probably not without correction. Use Holm if you need to be conservative (e.g., launch decision for one specific feature). Use BH if you're screening for promising segments to investigate further.
+]
+
+---
+
+# Application: Online Ads
+
+```{r ads-corrected, echo=FALSE, fig.height=4}
+set.seed(123)
+n_per_arm <- 10000
+# 10 creatives: 2 have real effects (0.003 and 0.002), rest are null
+true_effects <- c(0.003, 0.002, rep(0, 8))
+
+ad_results <- map_dfr(1:10, function(k) {
+  control <- rnorm(n_per_arm, mean = 0.02, sd = 0.05)
+  treatment <- rnorm(n_per_arm, mean = 0.02 + true_effects[k], sd = 0.05)
+  test <- t.test(treatment, control)
+  tibble(creative = paste0("Ad ", k),
+         true_effect = true_effects[k],
+         estimate = test$estimate[1] - test$estimate[2],
+         p_value = test$p.value)
+})
+
+ad_results <- ad_results |>
+  mutate(raw_sig = p_value < 0.05,
+         bh_p = p.adjust(p_value, method = "BH"),
+         bh_sig = bh_p < 0.05,
+         holm_p = p.adjust(p_value, method = "holm"),
+         holm_sig = holm_p < 0.05)
+
+ad_results |>
+  select(creative, true_effect, estimate, p_value, bh_p, holm_p) |>
+  mutate(across(where(is.numeric), ~ round(.x, 4))) |>
+  knitr::kable(col.names = c("Creative", "True effect", "Estimate",
+                              "Raw p", "BH adj. p", "Holm adj. p"))
+```
+
+--
+
+With 10 creatives tested, raw p-values can mislead. BH helps find the real winners while controlling the false discovery rate.
+
+---
+
+# Pre-Specified vs Exploratory Subgroups
+
+.pull-left[
+**Pre-specified** (in the analysis plan):
+- "We will test whether the effect differs by driver tenure (< 1 yr vs >= 1 yr)"
+- Correction burden is **limited** to the number of pre-specified tests
+- Much more credible
+
+**The rule:** if you pre-specify, you can test. But you still need to correct for however many pre-specified tests you have.
+]
+
+.pull-right[
+**Exploratory** (data-driven):
+- "We found the effect is huge for left-handed drivers in Portland on Tuesdays!"
+- Correction burden is **unknown** (how many things did you look at?)
+- Needs replication to be credible
+
+**The rule:** label these as exploratory. Use them to generate hypotheses for a follow-up experiment.
+]
+
+--
+
+.highlight-box[
+**Interview tip:** When someone presents a surprising subgroup result, ask: "Was this pre-specified?" If not, treat it as hypothesis-generating, not evidence.
+]
+
+---
+
+# Interaction Effects vs Subgroup-Specific Effects
+
+Two ways to look at heterogeneity:
+
+--
+
+.pull-left[
+**Subgroup-specific:** run the analysis separately in each group.
+
+```{r subgroup-specific, echo=FALSE}
+set.seed(42)
+n <- 2000
+dat <- tibble(
+  city_type = rep(c("Urban", "Suburban"), each = n/2),
+  treated = rep(c(0, 1), times = n/2),
+  y = case_when(
+    city_type == "Urban" ~ 10 + 3 * treated + rnorm(n),
+    city_type == "Suburban" ~ 10 + 1 * treated + rnorm(n)
+  )
+)
+
+dat |>
+  group_by(city_type) |>
+  summarise(
+    effect = mean(y[treated == 1]) - mean(y[treated == 0]),
+    p_value = t.test(y[treated == 1], y[treated == 0])$p.value
+  ) |>
+  knitr::kable(digits = 4, col.names = c("City type", "Effect", "p-value"))
+```
+]
+
+.pull-right[
+**Interaction:** one regression, test for *difference* in effects.
+
+.small[
+```{r interaction-test}
+mod <- lm(y ~ treated * city_type, data = dat)
+coef(summary(mod))[4, ] |>
+  round(4)
+```
+]
+]
+
+--
+
+.highlight-box[
+**Classic mistake:** "The effect is significant in urban (p = 0.001) and not significant in suburban (p = 0.12), so the effect is different across city types." **Wrong.** You must test the *interaction*. "Significant" vs "not significant" is not itself a significant difference.
+]
+
+---
+
+# Application: Ride-Sharing Heterogeneity
+
+A ride-sharing platform tests a driver incentive program. Effect might differ by city type, driver tenure, and time of day.
+
+```{r rideshare-het, echo=FALSE, fig.height=3.5}
+set.seed(99)
+n <- 6000
+ride <- tibble(
+  city = sample(c("Large urban", "Small urban", "Suburban"), n, replace = TRUE),
+  tenure = sample(c("< 6mo", "6mo-2yr", "> 2yr"), n, replace = TRUE),
+  peak = sample(c("Peak", "Off-peak"), n, replace = TRUE),
+  treated = sample(c(0, 1), n, replace = TRUE),
+  # True effect: 2 for large urban, 1 for small, 0 for suburban
+  # No real heterogeneity by tenure or peak
+  true_eff = case_when(city == "Large urban" ~ 2,
+                       city == "Small urban" ~ 1,
+                       TRUE ~ 0),
+  y = 10 + true_eff * treated + rnorm(n, sd = 4)
+)
+
+# 3 x 3 x 2 = 18 subgroups
+subgroup_results <- ride |>
+  group_by(city, tenure, peak) |>
+  summarise(
+    n = n(),
+    effect = mean(y[treated == 1]) - mean(y[treated == 0]),
+    p_value = t.test(y[treated == 1], y[treated == 0])$p.value,
+    .groups = "drop"
+  ) |>
+  mutate(sig_raw = p_value < 0.05,
+         p_bh = p.adjust(p_value, method = "BH"),
+         sig_bh = p_bh < 0.05)
+
+ggplot(subgroup_results, aes(reorder(paste(city, tenure, peak, sep = " | "),
+                                      effect),
+                              effect, fill = sig_raw)) +
+  geom_col(width = 0.6) +
+  coord_flip() +
+  scale_fill_manual(values = c("grey70", "firebrick"),
+                    labels = c("p >= 0.05", "p < 0.05")) +
+  labs(title = "18 subgroup tests: several 'significant' — but which are real?",
+       x = NULL, y = "Estimated effect", fill = "Raw p-value") +
+  theme(axis.text.y = element_text(size = 8))
+```
+
+---
+
+# Ride-Sharing: After Correction
+
+```{r rideshare-correction, echo=FALSE, fig.height=4}
+ggplot(subgroup_results, aes(reorder(paste(city, tenure, peak, sep = " | "),
+                                      effect),
+                              effect, fill = sig_bh)) +
+  geom_col(width = 0.6) +
+  coord_flip() +
+  scale_fill_manual(values = c("grey70", "steelblue"),
+                    labels = c("Not sig. (BH)", "Sig. (BH)")) +
+  labs(title = "After BH correction: only large urban subgroups survive",
+       subtitle = "Tenure and peak/off-peak heterogeneity was spurious",
+       x = NULL, y = "Estimated effect", fill = "BH-adjusted") +
+  theme(axis.text.y = element_text(size = 8))
+```
+
+--
+
+.highlight-box[
+**Better approach:** Pre-specify the city-type interaction. Test tenure and peak as exploratory. Report both raw and adjusted p-values.
+]
+
+---
+
+# The Garden of Forking Paths
+
+.pull-left[
+Researcher degrees of freedom include:
+
+1. Which outcome to focus on
+2. Which subgroups to analyze
+3. Which covariates to include
+4. How to define the treatment window
+5. Whether to drop outliers
+6. Which functional form to use
+7. How to handle missing data
+
+Each choice is a "fork." With enough forks, you can find significance **even when there is no effect**.
+]
+
+.pull-right[
+```{r forking-paths, echo=FALSE, fig.height=4.5}
+set.seed(42)
+# Simulate a null experiment with many forking paths
+n <- 500
+fork_dat <- tibble(
+  treated = sample(c(0, 1), n, replace = TRUE),
+  y1 = rnorm(n),
+  y2 = rnorm(n),
+  y3 = rnorm(n),
+  x1 = rnorm(n),
+  outlier = abs(y1) > 2.5
+)
+
+# Many ways to analyze the same data
+fork_p <- c(
+  t.test(y1 ~ treated, data = fork_dat)$p.value,
+  t.test(y2 ~ treated, data = fork_dat)$p.value,
+  t.test(y3 ~ treated, data = fork_dat)$p.value,
+  summary(lm(y1 ~ treated + x1, data = fork_dat))$coef[2,4],
+  summary(lm(y2 ~ treated + x1, data = fork_dat))$coef[2,4],
+  t.test(y1 ~ treated, data = fork_dat |> filter(!outlier))$p.value,
+  t.test(y1 ~ treated, data = fork_dat |> filter(x1 > 0))$p.value,
+  t.test(y1 ~ treated, data = fork_dat |> filter(x1 < 0))$p.value
+)
+
+tibble(
+  analysis = c("Y1 raw", "Y2 raw", "Y3 raw",
+               "Y1 + covariate", "Y2 + covariate",
+               "Y1 no outliers", "Y1 x>0", "Y1 x<0"),
+  p_value = fork_p
+) |>
+  ggplot(aes(reorder(analysis, p_value), p_value,
+             fill = p_value < 0.05)) +
+  geom_col(width = 0.6) +
+  geom_hline(yintercept = 0.05, linetype = "dashed",
+             color = "firebrick") +
+  coord_flip() +
+  scale_fill_manual(values = c("grey70", "firebrick"),
+                    guide = "none") +
+  labs(title = "8 analyses of the same null data",
+       x = NULL, y = "p-value")
+```
+]
+
+---
+
+# Pre-Analysis Plans: The Antidote
+
+.blue-box[
+**Pre-analysis plan (PAP):** A document written *before looking at the data* that specifies:
+- Primary outcome(s)
+- Primary hypothesis tests
+- Pre-specified subgroup analyses
+- How multiple testing will be handled
+- Rules for outliers, missing data, functional form
+]
+
+--
+
+**What a PAP does:**
+- Limits the number of "forks" → reduces the correction burden
+- Makes the distinction between confirmatory and exploratory analysis transparent
+- Does NOT prevent exploratory analysis — it just labels it honestly
+
+--
+
+.highlight-box[
+**Interview framing:** "We pre-specified one primary metric (conversion rate) and two subgroups (new vs returning users). We'll use Holm correction for these three tests. Any additional subgroup findings are exploratory and labeled as such."
+]
+
+---
+
+# Summary: Decision Framework
+
+```{r decision-tree, echo=FALSE, fig.height=4}
+tibble(
+  scenario = c("1 primary outcome,\nno subgroups",
+                "1 primary +\n2-3 pre-specified subgroups",
+                "Screening 10+ variants",
+                "Exploratory analysis\n(post hoc)"),
+  correction = c("None needed", "Holm (FWER)", "BH (FDR)", "Label as exploratory.\nNo p-values, or\ncaveat heavily."),
+  x = 1:4,
+  y = 1
+) |>
+  ggplot(aes(x, y)) +
+  geom_tile(width = 0.9, height = 0.6, fill = "steelblue", alpha = 0.15) +
+  geom_text(aes(label = scenario), vjust = -0.3, size = 3.5, fontface = "bold") +
+  geom_text(aes(label = correction), vjust = 1.5, size = 3, color = "firebrick") +
+  theme_void() +
+  labs(title = "Which correction to use?") +
+  ylim(0.5, 1.5)
+```
+
+--
+
+.highlight-box[
+**Key principle:** the correction should match the **actual number of tests you could have run**, not the number you chose to report. Pre-analysis plans make that number explicit and small.
+]
+
+---
+
+# Key Takeaways
+
+1. Testing $m$ hypotheses at $\alpha = 0.05$ gives FWER $= 1 - 0.95^m$. At $m = 20$, you have a 64% chance of a false positive.
+
+2. **Bonferroni** is simple but overly conservative. **Holm** dominates it. **BH** controls FDR instead of FWER and is best for screening.
+
+3. **"Significant in group A, not in group B"** does not mean the effect differs. Test the **interaction**.
+
+4. **Pre-specified** subgroups are credible (with correction). **Exploratory** subgroups are hypothesis-generating only.
+
+5. The **garden of forking paths** means even honest researchers can find spurious results. Pre-analysis plans are the antidote.
+
+6. In practice: pre-specify your primary metric and a small number of subgroups. Apply Holm. Report everything else as exploratory.
+
+---
+
+# Exercise Preview
+
+In the exercise (`exercise.R`) you will:
+
+1. Simulate 20 A/A tests and observe false positive inflation
+2. Apply Bonferroni, Holm, and BH corrections and compare
+3. Simulate a real effect in one subgroup among 20, show that it survives BH but might not survive Bonferroni
+4. Demonstrate the "significant vs not significant" fallacy with the interaction test
+5. Pre-register one subgroup analysis and show it survives correction
+
+See `exercise.R` for the starter code.
+
+---
+class: center, middle, inverse
+
+# Backup Slides
+
+---
+name: bonferroni-proof
+
+# Backup: Why Bonferroni Controls FWER
+
+**Claim:** If we test $m$ hypotheses each at $\alpha/m$, the FWER $\le \alpha$.
+
+--
+
+**Proof (Boole's inequality / union bound):**
+
+Let $A_k$ be the event "reject null hypothesis $k$ when it is true" (a false positive for test $k$).
+
+$$P(\text{at least one false positive}) = P\left(\bigcup_{k=1}^{m_0} A_k\right) \le \sum_{k=1}^{m_0} P(A_k) = m_0 \cdot \frac{\alpha}{m} \le m \cdot \frac{\alpha}{m} = \alpha$$
+
+where $m_0 \le m$ is the number of true nulls.
+
+--
+
+This holds **regardless of the dependence structure** among tests, which is why Bonferroni is so conservative when tests are positively correlated (as they often are with overlapping subgroups).
+
+---
+name: bh-procedure
+
+# Backup: BH Procedure Step by Step
+
+Given $m$ p-values $p_1, \ldots, p_m$:
+
+1. Sort them: $p_{(1)} \le p_{(2)} \le \cdots \le p_{(m)}$
+
+2. Find the largest $k$ such that $p_{(k)} \le \frac{k}{m} \cdot \alpha$
+
+3. Reject all hypotheses $H_{(1)}, \ldots, H_{(k)}$
+
+--
+
+**Example** with $m = 5$, $\alpha = 0.05$:
+
+| Rank $k$ | $p_{(k)}$ | BH threshold $\frac{k}{5} \cdot 0.05$ | Reject? |
+|-----------|-----------|----------------------------------------|---------|
+| 1 | 0.001 | 0.010 | Yes |
+| 2 | 0.013 | 0.020 | Yes |
+| 3 | 0.044 | 0.030 | No (largest $k$ with $p \le$ threshold is 2) |
+| 4 | 0.220 | 0.040 | No |
+| 5 | 0.890 | 0.050 | No |
+
+--
+
+**Theorem (Benjamini & Hochberg, 1995):** Under independence (or positive dependence), this procedure controls $\text{FDR} \le \alpha$.
+
+---
+name: holm-procedure
+
+# Backup: Holm's Step-Down Procedure
+
+Given $m$ p-values sorted as $p_{(1)} \le \cdots \le p_{(m)}$:
+
+1. Test $p_{(1)}$ against $\alpha / m$. If rejected, continue.
+2. Test $p_{(2)}$ against $\alpha / (m-1)$. If rejected, continue.
+3. ...
+4. Test $p_{(k)}$ against $\alpha / (m - k + 1)$. **Stop** at first non-rejection.
+
+--
+
+**Why it is more powerful than Bonferroni:**
+
+- Bonferroni uses the threshold $\alpha/m$ for **all** tests.
+- Holm uses $\alpha/m$ only for the smallest p-value, then progressively relaxes: $\alpha/(m-1)$, $\alpha/(m-2)$, etc.
+- Since the thresholds are weakly larger for all but the first test, Holm rejects at least as many hypotheses as Bonferroni.
+- Holm still controls FWER (proved via a closed testing argument).

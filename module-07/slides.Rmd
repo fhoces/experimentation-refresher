@@ -1,0 +1,684 @@
+---
+title: "Module 7: External Validity & Generalizability"
+subtitle: "Your Experiment Worked in SF. Will It Work in Lagos?"
+output:
+  xaringan::moon_reader:
+    css: [default, default-fonts]
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+      ratio: "16:9"
+---
+
+```{css, echo=FALSE}
+.remark-code, .remark-inline-code { font-size: 80%; }
+.remark-slide-content { padding: 1em 2em; }
+.small { font-size: 80%; }
+.tiny { font-size: 65%; }
+.highlight-box {
+  background: #fff3e0;
+  border-left: 4px solid #e65100;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+.blue-box {
+  background: #e3f2fd;
+  border-left: 4px solid #1565c0;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, fig.align = "center",
+  fig.width = 10, fig.height = 4.2, dpi = 150,
+  message = FALSE, warning = FALSE
+)
+library(tidyverse)
+theme_set(theme_minimal(base_size = 14))
+set.seed(42)
+```
+
+# Course Map
+
+<table>
+<tr><th>#</th><th>Module</th><th>Status</th></tr>
+<tr><td>1</td><td>The Experimental Ideal</td><td>done</td></tr>
+<tr><td>2</td><td>SUTVA and When It Breaks</td><td>done</td></tr>
+<tr><td>3</td><td>Designing Around Interference</td><td>done</td></tr>
+<tr><td>4</td><td>Power and Sample Size</td><td>done</td></tr>
+<tr><td>5</td><td>Analyzing Experiments</td><td>done</td></tr>
+<tr><td>6</td><td>Multiple Testing & Subgroups</td><td>done</td></tr>
+<tr><td><b>7</b></td><td><b>External Validity & Generalizability</b> <i>(you are here)</i></td><td>current</td></tr>
+<tr><td>8</td><td>Advanced Topics</td><td>upcoming</td></tr>
+</table>
+
+---
+
+# The Setup: A Pricing Experiment in San Francisco
+
+A ride-sharing platform runs a pricing experiment in San Francisco. A 10% price cut increases rides by 15%.
+
+```{r sf-experiment, echo=FALSE, fig.height=3.5}
+set.seed(42)
+n <- 2000
+sf_data <- tibble(
+  price_cut = sample(c(0, 1), n, replace = TRUE),
+  rides = rpois(n, lambda = 8 + 3 * price_cut)
+)
+
+sf_data |>
+  group_by(price_cut) |>
+  summarise(mean_rides = mean(rides), se = sd(rides) / sqrt(n())) |>
+  mutate(group = if_else(price_cut == 1, "10% price cut", "Control")) |>
+  ggplot(aes(group, mean_rides, fill = group)) +
+  geom_col(width = 0.5, show.legend = FALSE) +
+  geom_errorbar(aes(ymin = mean_rides - 1.96 * se,
+                     ymax = mean_rides + 1.96 * se), width = 0.15) +
+  scale_fill_manual(values = c("grey60", "steelblue")) +
+  labs(title = "SF experiment: 10% price cut increases rides",
+       subtitle = "Clean RCT, strong internal validity",
+       x = NULL, y = "Mean rides per user per week")
+```
+
+--
+
+The CEO asks: "Great, let's roll this out to all 50 cities." Should you?
+
+---
+
+# Internal vs External Validity
+
+.pull-left[
+.blue-box[
+**Internal validity:** Is the causal estimate correct *within the study*?
+- Randomization was done properly
+- No attrition, spillovers, or compliance issues
+- The estimated ATE is unbiased for the study population
+]
+]
+
+.pull-right[
+.blue-box[
+**External validity:** Does the effect generalize *beyond the study*?
+- To other populations (cities, countries)
+- To other time periods
+- To other implementations of the treatment
+- To other outcome measures
+]
+]
+
+--
+
+.highlight-box[
+**The tradeoff:** Lab experiments maximize internal validity (tight control) but may have low external validity (artificial setting). Field experiments in one site have high internal validity but limited external validity. Multi-site experiments trade some precision for generalizability.
+]
+
+---
+
+# Why SF Results Might Not Generalize
+
+```{r city-heterogeneity, echo=FALSE, fig.height=4}
+set.seed(42)
+n_cities <- 8
+city_data <- tibble(
+  city = c("San Francisco", "New York", "Lagos", "Mumbai",
+           "Austin", "London", "Sao Paulo", "Nairobi"),
+  supply_demand_ratio = c(1.2, 0.8, 0.4, 0.5, 1.5, 0.9, 0.6, 0.3),
+  # Effect depends on supply/demand: abundant supply -> price cuts work
+  true_effect = 1 + 4 * supply_demand_ratio + rnorm(n_cities, sd = 0.3)
+)
+
+ggplot(city_data, aes(supply_demand_ratio, true_effect, label = city)) +
+  geom_point(size = 3, color = "steelblue") +
+  geom_text(vjust = -0.7, size = 3.5) +
+  geom_smooth(method = "lm", se = FALSE, color = "firebrick",
+              linetype = "dashed") +
+  labs(title = "Treatment effect varies with local market conditions",
+       subtitle = "Price cuts work best where supply is abundant relative to demand",
+       x = "Supply/demand ratio", y = "Effect of 10% price cut (extra rides)")
+```
+
+--
+
+SF has high supply/demand ratio (lots of drivers). Lagos and Nairobi have low ratios (not enough drivers). A price cut in a supply-constrained market just generates unfulfilled demand.
+
+---
+
+# Site Selection Bias
+
+.blue-box[
+**Site selection bias:** The sites where experiments are run are not random samples of the target population. They are chosen for convenience, feasibility, or because the treatment is expected to work there.
+]
+
+--
+
+Common patterns:
+- Tech companies test in the US first (easiest market, most data)
+- Development RCTs often run in places with cooperative governments
+- Drug trials recruit from academic medical centers (not community clinics)
+
+--
+
+```{r site-selection, echo=FALSE, fig.height=2.8}
+tibble(
+  site = c("Experiment sites\n(selected)", "All sites\n(target)"),
+  mean_effect = c(3.5, 2.0),
+  se = c(0.3, 0.5)
+) |>
+  ggplot(aes(site, mean_effect)) +
+  geom_col(width = 0.4, fill = c("firebrick", "steelblue"), alpha = 0.7) +
+  geom_errorbar(aes(ymin = mean_effect - 1.96 * se,
+                     ymax = mean_effect + 1.96 * se), width = 0.1) +
+  labs(title = "Site selection bias: experiment sites are not representative",
+       x = NULL, y = "Average treatment effect") +
+  coord_flip()
+```
+
+---
+
+# Heterogeneous Treatment Effects: The Key
+
+```{r hte-simulation, echo=FALSE, fig.height=4}
+set.seed(42)
+n_sites <- 50
+sites <- tibble(
+  site_id = 1:n_sites,
+  # Site characteristic that moderates the effect
+  market_maturity = runif(n_sites, 0, 1),
+  # True effect depends on maturity: mature markets respond more
+  true_effect = 2 * market_maturity + rnorm(n_sites, sd = 0.5),
+  # Experiment ran in 5 most mature sites
+  in_experiment = rank(-market_maturity) <= 5
+)
+
+ggplot(sites, aes(market_maturity, true_effect,
+                   color = in_experiment, shape = in_experiment)) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("grey60", "firebrick"),
+                     labels = c("Not in experiment", "In experiment")) +
+  scale_shape_manual(values = c(16, 17),
+                     labels = c("Not in experiment", "In experiment")) +
+  geom_smooth(data = sites, aes(group = 1), method = "lm",
+              color = "steelblue", se = TRUE, linetype = "dashed") +
+  labs(title = "If you only experiment in mature markets, you overestimate the effect",
+       x = "Market maturity", y = "True treatment effect",
+       color = NULL, shape = NULL) +
+  theme(legend.position = "top")
+```
+
+--
+
+.highlight-box[
+**If treatment effects are homogeneous** (same everywhere), external validity is free. The problem is entirely driven by **heterogeneous treatment effects** that correlate with site characteristics.
+]
+
+---
+
+# Transportability: The Formal Framework
+
+.blue-box[
+**Transportability** (Pearl & Bareinboim, 2014): When can we use a causal effect estimated in population $A$ to predict the effect in population $B$?
+]
+
+--
+
+**Intuition:** You can transport if:
+
+1. You know **which variables** moderate the treatment effect (effect modifiers)
+2. You can **measure** those variables in both populations
+3. You can **adjust** for differences in those variables
+
+--
+
+$$\text{ATE}_B = \sum_x \text{CATE}(x) \cdot P_B(X = x)$$
+
+Re-weight the site-specific conditional effects by the target population's covariate distribution.
+
+--
+
+.highlight-box[
+**In practice:** This requires knowing the effect modifiers. If you miss an important one, transportability fails. Domain knowledge is essential.
+]
+
+---
+
+# Transportability: Simulation
+
+```{r transport-sim, echo=FALSE, fig.height=3.8}
+set.seed(42)
+n <- 3000
+
+# Source population (experiment site): mostly young, urban
+source <- tibble(
+  pop = "Source (experiment)",
+  age = rnorm(n, mean = 30, sd = 5),
+  urban = rbinom(n, 1, prob = 0.8),
+  treated = sample(c(0, 1), n, replace = TRUE),
+  # Effect moderated by age: younger people respond more
+  y = 5 + (3 - 0.05 * age) * treated + 2 * urban + rnorm(n)
+)
+
+# Target population: older, more rural
+target <- tibble(
+  pop = "Target (new market)",
+  age = rnorm(n, mean = 45, sd = 8),
+  urban = rbinom(n, 1, prob = 0.3),
+  treated = sample(c(0, 1), n, replace = TRUE),
+  y = 5 + (3 - 0.05 * age) * treated + 2 * urban + rnorm(n)
+)
+
+both <- bind_rows(source, target)
+
+effects <- both |>
+  group_by(pop) |>
+  summarise(ate = mean(y[treated == 1]) - mean(y[treated == 0]))
+
+ggplot(effects, aes(pop, ate, fill = pop)) +
+  geom_col(width = 0.5, show.legend = FALSE) +
+  scale_fill_manual(values = c("steelblue", "firebrick")) +
+  labs(title = "Same treatment, different populations, different effects",
+       subtitle = "Source pop is young & urban; target is older & rural",
+       x = NULL, y = "Average treatment effect") +
+  coord_flip()
+```
+
+--
+
+Naive extrapolation from the source would overestimate the effect in the target by `r round(effects$ate[2] - effects$ate[1], 1)` units.
+
+---
+
+# Dose-Response and Mechanism
+
+.pull-left[
+**Why does it work?** matters more than **does it work?** for generalizability.
+
+If you understand the **mechanism**, you can predict *where* the treatment will work:
+
+- Price cut works because it shifts demand → only works if supply can absorb it
+- Driver bonus works because it increases effort → works wherever effort is elastic
+- A nudge works because it reduces friction → works wherever friction is the bottleneck
+]
+
+.pull-right[
+```{r dose-response, echo=FALSE, fig.height=4}
+set.seed(42)
+dose_data <- tibble(
+  dose = rep(seq(0, 1, by = 0.1), each = 200),
+  y = 2 * dose / (0.3 + dose) + rnorm(11 * 200, sd = 0.3)
+)
+
+dose_data |>
+  group_by(dose) |>
+  summarise(mean_y = mean(y), se = sd(y)/sqrt(n())) |>
+  ggplot(aes(dose, mean_y)) +
+  geom_point(size = 2) +
+  geom_line(color = "steelblue", linewidth = 1) +
+  geom_ribbon(aes(ymin = mean_y - 1.96*se, ymax = mean_y + 1.96*se),
+              alpha = 0.2, fill = "steelblue") +
+  labs(title = "Dose-response curve: diminishing returns",
+       subtitle = "Understanding the shape helps predict effects at different doses",
+       x = "Treatment intensity (dose)", y = "Mean outcome")
+```
+]
+
+--
+
+.highlight-box[
+**Interview tip:** "If you ran the experiment at one dose level, can you predict the effect at another?" Only if you have a model of the dose-response relationship. A binary experiment gives you one point on the curve.
+]
+
+---
+
+# Temporal Validity: Effects That Decay
+
+```{r novelty-effect, echo=FALSE, fig.height=4}
+set.seed(42)
+weeks <- 1:24
+# True effect decays exponentially (novelty wears off)
+true_weekly_effect <- 5 * exp(-0.1 * weeks) + 0.5
+# Observed with noise
+observed_effect <- true_weekly_effect + rnorm(24, sd = 0.3)
+
+tibble(week = weeks, effect = observed_effect, true = true_weekly_effect) |>
+  ggplot(aes(week, effect)) +
+  geom_point(color = "steelblue", size = 2) +
+  geom_line(aes(y = true), color = "firebrick", linewidth = 1,
+            linetype = "dashed") +
+  geom_hline(yintercept = 0.5, linetype = "dotted") +
+  annotate("text", x = 20, y = 0.9, label = "Long-run effect",
+           color = "grey40") +
+  annotate("rect", xmin = 1, xmax = 4, ymin = -Inf, ymax = Inf,
+           alpha = 0.1, fill = "steelblue") +
+  annotate("text", x = 2.5, y = 1.5, label = "Experiment\nwindow",
+           color = "steelblue", size = 3) +
+  labs(title = "Novelty effects: the experiment overstates the long-run impact",
+       subtitle = "A 4-week experiment captures the peak, not the steady state",
+       x = "Week", y = "Treatment effect")
+```
+
+--
+
+.highlight-box[
+**Novelty effects in tech:** New features get attention because they are new. The 4-week A/B test shows a 4x larger effect than the steady state. Solution: run longer experiments, or model the decay curve.
+]
+
+---
+
+# Hawthorne and Demand Effects
+
+.pull-left[
+.blue-box[
+**Hawthorne effect:** People change behavior because they know they are being observed, not because of the treatment itself.
+]
+
+- Lab experiments are most susceptible
+- A/B tests where users don't know they're in an experiment are less susceptible
+- But surveys, feedback forms, and opt-in studies are vulnerable
+]
+
+.pull-right[
+.blue-box[
+**Demand effect:** Participants guess the hypothesis and behave accordingly (or contrarily).
+]
+
+- "I think they want me to click more ads, so I will"
+- Or: "I think they want me to click more, so I won't (reactance)"
+- Mitigated by: blinding, behavioral (not self-reported) outcomes, deception
+]
+
+--
+
+.highlight-box[
+**For tech interviews:** These are less of a concern in standard A/B tests (users don't know their assignment). But they matter for: employee experiments, opt-in trials, user research studies, and any experiment with self-reported outcomes.
+]
+
+---
+
+# Application: Ride-Sharing Across Cities
+
+```{r rideshare-cities, echo=FALSE, fig.height=4}
+set.seed(42)
+n_cities <- 12
+cities <- tibble(
+  city = c("San Francisco", "New York", "Chicago", "Austin",
+           "Lagos", "Nairobi", "Mumbai", "Jakarta",
+           "London", "Berlin", "Tokyo", "Sydney"),
+  region = rep(c("US", "Emerging", "International"), each = 4),
+  supply_ratio = c(1.3, 0.9, 1.1, 1.5,
+                   0.3, 0.25, 0.4, 0.35,
+                   0.95, 1.0, 0.85, 1.1),
+  # True effect of price cut depends on supply
+  true_effect = 1 + 3 * supply_ratio + rnorm(n_cities, sd = 0.3),
+  # Experiment only ran in SF
+  experimental = city == "San Francisco"
+)
+
+ggplot(cities, aes(supply_ratio, true_effect, color = region, label = city)) +
+  geom_point(size = 3) +
+  geom_text(vjust = -0.7, size = 3, show.legend = FALSE) +
+  geom_smooth(aes(group = 1), method = "lm", se = TRUE,
+              color = "grey50", linetype = "dashed") +
+  geom_point(data = cities |> filter(experimental),
+             shape = 1, size = 6, color = "firebrick", stroke = 1.5) +
+  annotate("text", x = 1.35, y = cities$true_effect[1] + 0.3,
+           label = "Experiment here", color = "firebrick", size = 3) +
+  labs(title = "Extrapolating from SF to other cities",
+       subtitle = "Effect depends on supply/demand ratio; emerging markets are very different",
+       x = "Driver supply / rider demand ratio",
+       y = "Effect of 10% price cut (extra rides)", color = "Region") +
+  theme(legend.position = "top")
+```
+
+---
+
+# What Would Help Generalizability?
+
+**Strategy 1: Multi-site experiments**
+
+Run the experiment in 5-10 diverse cities, not just SF. Estimate site-specific effects and model the heterogeneity.
+
+--
+
+**Strategy 2: Identify effect modifiers**
+
+.small[
+```{r effect-modifiers}
+# If we had multi-site data, we could model the heterogeneity
+cities_mod <- lm(true_effect ~ supply_ratio, data = cities)
+cat("Effect per unit supply ratio:", round(coef(cities_mod)[2], 2), "\n")
+# Predict for a new city
+new_city <- data.frame(supply_ratio = 0.35)
+cat("Predicted effect for city with supply ratio 0.35:",
+    round(predict(cities_mod, new_city), 2), "\n")
+```
+]
+
+--
+
+**Strategy 3: Understand the mechanism**
+
+Why do price cuts increase rides? If it is because supply is elastic (more drivers come online), then it won't work where supply is constrained. Test the mechanism, not just the outcome.
+
+---
+
+# Application: Do Research Results Generalize?
+
+```{r research-generalize, echo=FALSE, fig.height=4}
+set.seed(42)
+# Simulate studies from two eras with different research practices
+n_studies <- 100
+
+era_vec <- rep(c("2015-2017", "2022-2024"), each = n_studies/2)
+studies <- tibble(
+  study_id = 1:n_studies,
+  era = era_vec,
+  has_pap = ifelse(era_vec == "2015-2017",
+                   rbinom(n_studies, 1, 0.3),
+                   rbinom(n_studies, 1, 0.7)),
+  sample_size = ifelse(era_vec == "2015-2017",
+                       round(runif(n_studies, 200, 2000)),
+                       round(runif(n_studies, 500, 5000))),
+  # Reporting rate depends on era and PAP status
+  reporting_rate = pmin(1, pmax(0,
+    0.3 + 0.15 * has_pap + 0.1 * (era == "2022-2024") +
+    rnorm(n_studies, sd = 0.15)
+  ))
+)
+
+ggplot(studies, aes(era, reporting_rate, fill = factor(has_pap))) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = c("grey60", "steelblue"),
+                    labels = c("No PAP", "Has PAP")) +
+  labs(title = "Reporting rates by era and PAP status",
+       subtitle = "Simulated data: later studies report more, especially with PAPs",
+       x = "Study era", y = "Proportion of hypotheses reported",
+       fill = NULL) +
+  theme(legend.position = "top")
+```
+
+--
+
+Results from 2015-2017 studies may not generalize to today: different PAP norms, larger samples, different publication incentives. **Temporal external validity** is a concern.
+
+---
+
+# When Extrapolation Fails: A Simulation
+
+```{r extrapolation-fail, echo=FALSE, fig.height=4}
+set.seed(42)
+n_sites <- 30
+n_per_site <- 200
+
+# Generate sites with different characteristics
+all_sites <- map_dfr(1:n_sites, function(s) {
+  char <- runif(1, 0, 2)  # site characteristic
+  # True CATE depends non-linearly on characteristic
+  true_cate <- 3 * sin(char * pi / 2)
+  tibble(
+    site = s,
+    characteristic = char,
+    true_cate = true_cate,
+    treated = sample(c(0, 1), n_per_site, replace = TRUE),
+    y = 5 + true_cate * treated + rnorm(n_per_site, sd = 2)
+  )
+})
+
+site_effects <- all_sites |>
+  group_by(site, characteristic, true_cate) |>
+  summarise(est = mean(y[treated == 1]) - mean(y[treated == 0]),
+            .groups = "drop") |>
+  mutate(in_sample = characteristic < 1)  # experiment in low-char sites
+
+ggplot(site_effects, aes(characteristic, est, color = in_sample)) +
+  geom_point(size = 3) +
+  geom_line(aes(y = true_cate, group = 1), color = "firebrick",
+            linewidth = 1, linetype = "dashed") +
+  geom_smooth(data = site_effects |> filter(in_sample),
+              method = "lm", se = TRUE, color = "steelblue",
+              fullrange = TRUE) +
+  geom_vline(xintercept = 1, linetype = "dotted") +
+  annotate("text", x = 0.5, y = -0.5, label = "Experiment\nsites",
+           color = "steelblue", size = 3.5) +
+  annotate("text", x = 1.5, y = -0.5, label = "Extrapolation\nzone",
+           color = "firebrick", size = 3.5) +
+  scale_color_manual(values = c("firebrick", "steelblue"), guide = "none") +
+  labs(title = "Linear extrapolation fails when the true relationship is non-linear",
+       subtitle = "The linear fit from experiment sites badly predicts effects elsewhere",
+       x = "Site characteristic", y = "Treatment effect")
+```
+
+---
+
+# Strategies for Improving External Validity
+
+| Strategy | How it helps | Cost |
+|----------|-------------|------|
+| **Multi-site experiments** | Directly measures heterogeneity | Expensive, complex logistics |
+| **Stratified site selection** | Ensures diversity on key dimensions | Need to know the key dimensions |
+| **Effect modifier analysis** | Models why effects vary | Needs theory + data on moderators |
+| **Mechanism tests** | Predicts where treatment will work | Requires understanding of mechanism |
+| **Replication** | Confirms or refutes in new settings | Time, resources |
+| **Longer experiments** | Captures steady state, not novelty | Opportunity cost |
+
+--
+
+.highlight-box[
+**The meta-point:** External validity cannot be tested — only argued for. Internal validity can be designed in (randomization). External validity requires theory, multiple studies, and honest uncertainty about generalizability.
+]
+
+---
+
+# Key Takeaways
+
+1. **Internal validity** (is the estimate right?) and **external validity** (does it generalize?) are distinct. High internal validity does not imply high external validity.
+
+2. External validity fails when **treatment effects are heterogeneous** and the experimental population differs from the target population on the effect modifiers.
+
+3. **Site selection bias** is pervasive: experiments run in convenient or favorable locations overstate average effects.
+
+4. **Transportability** requires knowing the effect modifiers and adjusting for distributional differences. Without this knowledge, extrapolation is guesswork.
+
+5. **Novelty effects** and **Hawthorne effects** threaten temporal external validity. Short experiments may overstate long-run impacts.
+
+6. **Understanding the mechanism** is the most powerful tool for generalizability: *why* it works tells you *where* it will work.
+
+---
+
+# Exercise Preview
+
+In the exercise (`exercise.R`) you will:
+
+1. Simulate treatment effects that vary across 30 sites based on site characteristics
+2. Run an experiment in a biased subset of sites and show the estimate doesn't generalize
+3. Apply a transportability reweighting approach and show it recovers the target ATE
+4. Simulate novelty effects and show how experiment duration affects the estimate
+5. Compare multi-site vs single-site experimental designs
+
+See `exercise.R` for the starter code.
+
+---
+class: center, middle, inverse
+
+# Backup Slides
+
+---
+name: transport-formula
+
+# Backup: Transportability Formula
+
+**Setup:** Experiment in population $A$, target population $B$. Let $X$ be observed effect modifiers.
+
+The ATE in $B$ is:
+
+$$\tau_B = E_B[Y(1) - Y(0)] = \sum_x E_A[Y(1) - Y(0) \mid X = x] \cdot P_B(X = x)$$
+
+--
+
+**Assumptions required:**
+
+1. **Conditional exchangeability across populations:** $\tau(x) = E_A[Y(1) - Y(0) \mid X = x] = E_B[Y(1) - Y(0) \mid X = x]$
+
+2. **Positivity:** $P_A(X = x) > 0$ for all $x$ with $P_B(X = x) > 0$
+
+3. **Correct specification** of the effect modifier set $X$
+
+--
+
+**In practice:** Estimate $\hat{\tau}(x)$ from the experimental data, then reweight:
+
+$$\hat{\tau}_B = \frac{1}{n_B} \sum_{i \in B} \hat{\tau}(x_i)$$
+
+This is analogous to survey reweighting / inverse probability weighting, but for treatment effects rather than means.
+
+---
+name: multisite-design
+
+# Backup: Multi-Site Experimental Design
+
+**Option 1: Same treatment, many sites**
+
+- Estimate site-specific effects $\hat{\tau}_s$ for $s = 1, \ldots, S$
+- The overall ATE is a weighted average: $\hat{\tau} = \sum_s w_s \hat{\tau}_s$
+- Weights can be equal (average site effect) or proportional to site size (population ATE)
+- Key: report the **variance** of site-specific effects, not just the average
+
+--
+
+**Option 2: Vary the treatment across sites (factorial design)**
+
+- Different doses, implementations, or contexts
+- Allows estimation of dose-response curves
+- Requires more sites and/or larger samples
+
+--
+
+**Power consideration:**
+
+- With $S$ sites, you have $S$ "observations" for estimating heterogeneity
+- Individual-level $N$ does not help with site-level inference
+- Rule of thumb: $S \ge 20$ for meaningful heterogeneity analysis
+
+---
+name: novelty-modeling
+
+# Backup: Modeling Novelty / Decay Effects
+
+**Exponential decay model:**
+
+$$\tau(t) = \tau_{\infty} + (\tau_0 - \tau_{\infty}) \cdot e^{-\lambda t}$$
+
+where:
+- $\tau_0$ = initial treatment effect (includes novelty)
+- $\tau_{\infty}$ = long-run (steady state) treatment effect
+- $\lambda$ = decay rate
+- $t$ = time since treatment onset
+
+--
+
+**Estimation:** Run a long experiment (or multiple cohorts with staggered start). Estimate $\tau(t)$ for each time period and fit the decay curve.
+
+**Practical note:** If $\tau_{\infty} = 0$, the treatment has no lasting effect. This is surprisingly common for UI changes, notifications, and other "attention-grabbing" interventions. A 4-week experiment cannot distinguish a slowly-decaying effect from a permanent one.

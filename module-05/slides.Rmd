@@ -1,0 +1,652 @@
+---
+title: "Module 5: Analyzing Experiments"
+subtitle: "From Difference in Means to CUPED, ITT, and LATE"
+output:
+  xaringan::moon_reader:
+    css: [default, default-fonts]
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+      ratio: "16:9"
+---
+
+```{css, echo=FALSE}
+.remark-code, .remark-inline-code { font-size: 80%; }
+.remark-slide-content { padding: 1em 2em; }
+.small { font-size: 80%; }
+.tiny { font-size: 65%; }
+.highlight-box {
+  background: #fff3e0;
+  border-left: 4px solid #e65100;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+.blue-box {
+  background: #e3f2fd;
+  border-left: 4px solid #1565c0;
+  padding: 0.5em 1em;
+  margin: 0.5em 0;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, fig.align = "center",
+  fig.width = 10, fig.height = 4.2, dpi = 150,
+  message = FALSE, warning = FALSE
+)
+library(tidyverse)
+theme_set(theme_minimal(base_size = 14))
+set.seed(42)
+```
+
+# Course Map
+
+<table>
+<tr><th>#</th><th>Module</th><th>Status</th></tr>
+<tr><td>1</td><td>The Experimental Ideal</td><td>done</td></tr>
+<tr><td>2</td><td>SUTVA and When It Breaks</td><td>done</td></tr>
+<tr><td>3</td><td>Designing Around Interference</td><td>done</td></tr>
+<tr><td>4</td><td>Power and Sample Size</td><td>done</td></tr>
+<tr><td><b>5</b></td><td><b>Analyzing Experiments</b> <i>(you are here)</i></td><td>current</td></tr>
+<tr><td>6</td><td>Multiple Testing & Subgroups</td><td>upcoming</td></tr>
+<tr><td>7</td><td>External Validity</td><td>upcoming</td></tr>
+<tr><td>8</td><td>Advanced Topics</td><td>upcoming</td></tr>
+</table>
+
+---
+
+# Start Simple: Difference in Means
+
+A ride-sharing company tests a $50 driver bonus. 2,000 drivers randomized equally.
+
+```{r dim-setup}
+n <- 2000
+drivers <- tibble(
+  id = 1:n,
+  pre_trips = rpois(n, lambda = 30),  # pre-treatment trips
+  bonus = rep(c(0, 1), each = n / 2),
+  # True effect: 3 extra trips. Noisy outcome correlated with pre_trips.
+  post_trips = pre_trips + 3 * bonus + rnorm(n, sd = 12)
+)
+```
+
+--
+
+```{r dim-estimate}
+mean(drivers$post_trips[drivers$bonus == 1]) -
+  mean(drivers$post_trips[drivers$bonus == 0])
+```
+
+--
+
+This is unbiased for the ATE. But the standard error is large because `post_trips` is noisy.
+
+---
+
+# Regression: Same Thing, More Flexible
+
+```{r regression-basic}
+fit_simple <- lm(post_trips ~ bonus, data = drivers)
+summary(fit_simple)$coefficients |> round(3)
+```
+
+--
+
+The coefficient on `bonus` is identical to the difference in means.
+
+--
+
+.blue-box[
+**Key fact:** In a randomized experiment with no covariates, OLS regression of $Y$ on $D$ gives exactly the difference in means. The regression framework just makes it easier to add covariates and compute standard errors.
+]
+
+---
+
+# Adding Covariates: Why and How
+
+Pre-treatment trips (`pre_trips`) predict post-treatment trips. Adding it as a covariate reduces residual variance:
+
+```{r regression-covariate}
+fit_covar <- lm(post_trips ~ bonus + pre_trips, data = drivers)
+summary(fit_covar)$coefficients |> round(3)
+```
+
+--
+
+.pull-left[
+**Without covariate:**
+```{r compare-se, echo=FALSE}
+cat("SE(bonus):", round(summary(fit_simple)$coefficients[2, 2], 3))
+```
+]
+
+.pull-right[
+**With covariate:**
+```{r compare-se2, echo=FALSE}
+cat("SE(bonus):", round(summary(fit_covar)$coefficients[2, 2], 3))
+```
+]
+
+--
+
+.highlight-box[
+The standard error dropped substantially. Same data, same experiment, but a **tighter** estimate -- just by using information we already had.
+]
+
+---
+
+# Lin (2013): Covariate Adjustment Done Right
+
+Simply adding covariates to a regression can be slightly wrong when treatment effects are heterogeneous. Lin (2013) showed the right way:
+
+--
+
+.blue-box[
+**Lin's estimator:** Interact the (demeaned) covariate with treatment:
+
+$$Y_i = \alpha + \tau D_i + \beta (X_i - \bar{X}) + \gamma D_i (X_i - \bar{X}) + \varepsilon_i$$
+
+This is **always** at least as precise as the simple difference in means, regardless of whether the covariate matters.
+]
+
+--
+
+.small[
+```{r lin-estimator}
+drivers <- drivers |> mutate(pre_trips_dm = pre_trips - mean(pre_trips))
+fit_lin <- lm(post_trips ~ bonus * pre_trips_dm, data = drivers)
+summary(fit_lin)$coefficients |> round(3)
+```
+]
+
+The treatment effect estimate is the coefficient on `bonus`.
+
+---
+
+# CUPED: Variance Reduction Using Pre-Experiment Data
+
+.blue-box[
+**CUPED** (Controlled-experiment Using Pre-Experiment Data): Use the pre-treatment outcome to reduce variance of the treatment effect estimate. Widely used at Microsoft, Netflix, and other tech companies.
+]
+
+--
+
+The idea: construct a variance-reduced outcome:
+
+$$\tilde{Y}_i = Y_i - \theta (X_i - \bar{X})$$
+
+where $X_i$ is the pre-treatment outcome and $\theta = \frac{\text{Cov}(Y, X)}{\text{Var}(X)}$.
+
+--
+
+```{r cuped-implement}
+theta <- cov(drivers$post_trips, drivers$pre_trips) / var(drivers$pre_trips)
+drivers <- drivers |>
+  mutate(y_cuped = post_trips - theta * (pre_trips - mean(pre_trips)))
+
+# Compare variance
+cat("Var(post_trips):", round(var(drivers$post_trips), 1), "\n")
+cat("Var(y_cuped):   ", round(var(drivers$y_cuped), 1), "\n")
+cat("Variance reduction:", round(1 - var(drivers$y_cuped)/var(drivers$post_trips), 3))
+```
+
+---
+
+# CUPED = Regression (It's the Same Thing)
+
+```{r cuped-vs-regression}
+# CUPED estimate
+cuped_est <- mean(drivers$y_cuped[drivers$bonus == 1]) -
+             mean(drivers$y_cuped[drivers$bonus == 0])
+
+# Regression with covariate
+reg_est <- coef(fit_covar)["bonus"]
+
+cat("CUPED estimate:     ", round(cuped_est, 3), "\n")
+cat("Regression estimate:", round(reg_est, 3), "\n")
+```
+
+--
+
+.highlight-box[
+**CUPED is just regression adjustment repackaged.** The optimal $\theta$ is the OLS coefficient of $Y$ on $X$. The CUPED-adjusted difference in means equals the regression coefficient on treatment.
+
+Why use CUPED framing? It's easier to implement in production pipelines (you transform the metric once, then compute simple means).
+]
+
+---
+
+# Simulation: CUPED Variance Reduction
+
+```{r cuped-sim, echo=FALSE, fig.height=4}
+sim_cuped <- function(i, use_cuped = FALSE) {
+  pre <- rpois(2000, lambda = 30)
+  treat <- rep(c(0, 1), each = 1000)
+  post <- pre + 3 * treat + rnorm(2000, sd = 12)
+  if (use_cuped) {
+    th <- cov(post, pre) / var(pre)
+    post <- post - th * (pre - mean(pre))
+  }
+  mean(post[treat == 1]) - mean(post[treat == 0])
+}
+
+raw_ests <- map_dbl(1:2000, ~ sim_cuped(.x, FALSE))
+cuped_ests <- map_dbl(1:2000, ~ sim_cuped(.x, TRUE))
+
+bind_rows(
+  tibble(estimate = raw_ests, method = "Raw difference in means"),
+  tibble(estimate = cuped_ests, method = "CUPED-adjusted")
+) |>
+  ggplot(aes(estimate, fill = method)) +
+  geom_histogram(bins = 50, alpha = 0.6, position = "identity") +
+  geom_vline(xintercept = 3, linetype = "dashed", color = "firebrick", linewidth = 1) +
+  annotate("text", x = 3.1, y = 100, label = "True effect = 3",
+           color = "firebrick", hjust = 0, size = 4) +
+  labs(title = "CUPED tightens the distribution of estimates",
+       subtitle = paste0("SD(raw) = ", round(sd(raw_ests), 2),
+                        " vs SD(CUPED) = ", round(sd(cuped_ests), 2)),
+       x = "Estimated treatment effect", y = "Count") +
+  theme(legend.position = "top")
+```
+
+Both centered on the truth, but CUPED has a much narrower spread.
+
+---
+
+# Stratification and Post-Stratification
+
+**Stratified randomization:** Randomize *within* blocks defined by important covariates. Guarantees exact balance.
+
+--
+
+```{r stratification}
+# Stratify by pre_trips tercile
+drivers_strat <- drivers |>
+  mutate(stratum = ntile(pre_trips, 3),
+         bonus_strat = ave(1:n(), stratum, FUN = function(x)
+           sample(rep(c(0, 1), length.out = length(x)))))
+
+# Post-stratification: add stratum fixed effects
+fit_strat <- lm(post_trips ~ bonus + factor(stratum), data = drivers_strat)
+summary(fit_strat)$coefficients[1:2, ] |> round(3)
+```
+
+--
+
+.highlight-box[
+**Post-stratification** adjusts for strata after the fact (even if randomization wasn't stratified). It's a free variance reduction -- always include randomization strata as fixed effects.
+]
+
+---
+
+# Robust Standard Errors
+
+OLS standard errors assume homoskedasticity. In experiments, we should use **heteroskedasticity-robust** (HC) standard errors.
+
+--
+
+.small[
+```{r robust-se}
+# HC2 standard errors (recommended for experiments)
+# Using the sandwich formula manually:
+X <- model.matrix(fit_covar)
+e <- residuals(fit_covar)
+hat_vals <- hatvalues(fit_covar)
+meat <- t(X) %*% diag(e^2 / (1 - hat_vals)) %*% X
+bread <- solve(t(X) %*% X)
+vcov_hc2 <- bread %*% meat %*% bread
+se_hc2 <- sqrt(diag(vcov_hc2))
+
+cat("OLS SE: ", round(summary(fit_covar)$coefficients[2, 2], 3), "\n")
+cat("HC2 SE: ", round(se_hc2[2], 3), "\n")
+```
+]
+
+--
+
+For **cluster-randomized** designs, cluster the standard errors at the level of randomization:
+
+.small[
+```{r cluster-se-note, eval=FALSE}
+# If randomized at city level:
+# lm(y ~ treatment, data = df) with cluster-robust SEs at city level
+# Or use fixest::feols(y ~ treatment, cluster = ~city, data = df)
+```
+]
+
+---
+
+# ITT vs LATE: Non-Compliance
+
+Not everyone assigned to treatment actually takes the treatment.
+
+```{r noncompliance-setup}
+n <- 2000
+experiment <- tibble(
+  id = 1:n,
+  assigned = rep(c(0, 1), each = n / 2),
+  # 70% compliance: only 70% of those assigned to bonus actually use it
+  complied = if_else(assigned == 1, rbinom(n, 1, prob = 0.70), 0L),
+  # Effect only for compliers: 5 extra trips
+  post_trips = rpois(n, lambda = 30) + 5 * complied + rnorm(n, sd = 8)
+)
+```
+
+--
+
+.pull-left[
+**ITT** (Intent-to-Treat):
+```{r itt}
+itt <- mean(experiment$post_trips[experiment$assigned == 1]) -
+       mean(experiment$post_trips[experiment$assigned == 0])
+cat("ITT:", round(itt, 2))
+```
+]
+
+.pull-right[
+**LATE** (Local Average Treatment Effect):
+```{r late}
+compliance_rate <- mean(experiment$complied[experiment$assigned == 1])
+late <- itt / compliance_rate
+cat("LATE:", round(late, 2), "\n")
+cat("Compliance:", round(compliance_rate, 2))
+```
+]
+
+---
+
+# ITT vs LATE: What to Report?
+
+.blue-box[
+**ITT** = effect of *assigning* treatment. Always identified by randomization. This is the policy-relevant effect: "what happens if we offer this to everyone?"
+
+**LATE** = effect of *taking* treatment on compliers. Requires additional assumptions (monotonicity, exclusion restriction). This is the "efficacy" effect.
+]
+
+--
+
+```{r itt-late-iv, echo=FALSE}
+# IV regression (2SLS) gives LATE
+fit_iv_first <- lm(complied ~ assigned, data = experiment)
+experiment$complied_hat <- fitted(fit_iv_first)
+fit_iv_second <- lm(post_trips ~ complied_hat, data = experiment)
+
+tibble(
+  Estimand = c("ITT (OLS on assignment)", "LATE (IV / Wald)",
+               "Naive (OLS on compliance)"),
+  Estimate = c(coef(lm(post_trips ~ assigned, data = experiment))[2],
+               coef(fit_iv_second)[2],
+               coef(lm(post_trips ~ complied, data = experiment))[2]),
+  Issue = c("Diluted by non-compliance", "Accounts for non-compliance",
+            "BIASED: compliance is endogenous")
+) |> knitr::kable(digits = 2)
+```
+
+--
+
+.highlight-box[
+**Never** regress on actual treatment take-up -- it's endogenous. Use assignment as an instrument (2SLS) to get LATE, or report ITT.
+]
+
+---
+
+# Application: Ride-Sharing Driver Bonus with CUPED
+
+```{r rideshare-cuped, echo=FALSE, fig.height=4}
+n <- 3000
+set.seed(123)
+ride_data <- tibble(
+  driver_id = 1:n,
+  city = sample(c("SF", "LA", "NYC", "CHI"), n, replace = TRUE),
+  pre_earnings = rlnorm(n, meanlog = 6, sdlog = 0.5),
+  bonus = rep(c(0, 1), each = n / 2),
+  # True effect: $200 boost, but noisy
+  post_earnings = pre_earnings * exp(rnorm(n, sd = 0.3)) + 200 * bonus + rnorm(n, sd = 100)
+)
+
+# Raw
+raw_effect <- mean(ride_data$post_earnings[ride_data$bonus == 1]) -
+              mean(ride_data$post_earnings[ride_data$bonus == 0])
+raw_se <- sqrt(var(ride_data$post_earnings[ride_data$bonus == 1]) / (n/2) +
+               var(ride_data$post_earnings[ride_data$bonus == 0]) / (n/2))
+
+# CUPED
+theta_ride <- cov(ride_data$post_earnings, ride_data$pre_earnings) /
+              var(ride_data$pre_earnings)
+ride_data$y_cuped <- ride_data$post_earnings -
+                     theta_ride * (ride_data$pre_earnings - mean(ride_data$pre_earnings))
+cuped_effect <- mean(ride_data$y_cuped[ride_data$bonus == 1]) -
+                mean(ride_data$y_cuped[ride_data$bonus == 0])
+cuped_se <- sqrt(var(ride_data$y_cuped[ride_data$bonus == 1]) / (n/2) +
+                 var(ride_data$y_cuped[ride_data$bonus == 0]) / (n/2))
+
+tibble(
+  Method = c("Raw", "CUPED"),
+  Estimate = c(raw_effect, cuped_effect),
+  SE = c(raw_se, cuped_se),
+  CI_lower = Estimate - 1.96 * SE,
+  CI_upper = Estimate + 1.96 * SE
+) |>
+  ggplot(aes(Method, Estimate)) +
+  geom_point(size = 4) +
+  geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper), width = 0.2, linewidth = 1) +
+  geom_hline(yintercept = 200, linetype = "dashed", color = "firebrick") +
+  annotate("text", x = 2.3, y = 200, label = "True effect = $200",
+           color = "firebrick", size = 4) +
+  labs(title = "CUPED narrows the confidence interval",
+       subtitle = paste0("Variance reduction: ",
+                        round((1 - cuped_se^2/raw_se^2) * 100), "%"),
+       y = "Estimated effect ($)")
+```
+
+---
+
+# Application: DiD for Pre/Post Intervention
+
+Simulated academic reporting experiment: 200 studies, 4 treatment arms (T0-T3), measure hypothesis reporting rates before and after intervention.
+
+.small[
+```{r did-setup}
+n_studies <- 200
+studies <- tibble(
+  study_id = 1:n_studies,
+  has_pap = rbinom(n_studies, 1, 0.4),
+  arm = sample(rep(c("T0", "T1", "T2", "T3"), each = n_studies / 4)),
+  # Pre-period: ~42% of hypotheses reported on average
+  y_pre = rbeta(n_studies, shape1 = 3, shape2 = 4),
+  # Post-period: T0 no change, T1-T3 increase reporting
+  effect = case_when(
+    arm == "T0" ~ 0,
+    arm == "T1" ~ 0.03,
+    arm == "T2" ~ 0.06,
+    arm == "T3" ~ 0.10
+  ),
+  y_post = pmin(1, y_pre + effect + rnorm(n_studies, sd = 0.08))
+)
+```
+]
+
+---
+
+# DiD: Estimating Treatment Effects
+
+```{r did-regression}
+# Reshape to panel
+panel <- studies |>
+  pivot_longer(cols = c(y_pre, y_post), names_to = "period",
+               values_to = "y_report", names_prefix = "y_") |>
+  mutate(post = if_else(period == "post", 1, 0))
+
+# DiD regression with study fixed effects
+fit_did <- lm(y_report ~ factor(study_id) + post:factor(arm), data = panel)
+
+# Extract treatment effects (post x arm interactions)
+did_coefs <- coef(fit_did)
+treat_effects <- did_coefs[grep("post:factor\\(arm\\)", names(did_coefs))]
+names(treat_effects) <- c("T1 vs T0", "T2 vs T0", "T3 vs T0")
+round(treat_effects, 3)
+```
+
+--
+
+.highlight-box[
+**DiD** removes time-invariant study-level confounders. Each study is its own control. The identifying assumption: absent treatment, reporting rates would have changed equally across arms (parallel trends).
+]
+
+---
+
+# Pre-Analysis Plans
+
+.blue-box[
+**Pre-analysis plan (PAP):** A document specifying the analysis *before* seeing the data. Includes: primary outcomes, estimating equations, subgroup analyses, and how to handle complications.
+]
+
+--
+
+A good PAP specifies:
+
+1. **Primary outcome(s)** and how they're constructed
+2. **Estimating equation** (e.g., the DiD specification above)
+3. **Standard errors** (robust? clustered? at what level?)
+4. **Multiple testing** corrections (if applicable -- Module 6)
+5. **Subgroup analyses** (which ones are confirmatory vs. exploratory?)
+6. **Rules for deviations** (what do you do if compliance is lower than expected?)
+
+--
+
+.highlight-box[
+**Why PAPs matter:** Without pre-commitment, researchers (or product teams) can run dozens of specifications and report only the significant ones. A PAP distinguishes confirmatory from exploratory analysis.
+]
+
+---
+
+# Summary: The Analysis Toolkit
+
+| Method | When to Use | Key Benefit |
+|--------|------------|-------------|
+| Difference in means | Simplest case | Unbiased, transparent |
+| Regression + covariates | Pre-treatment predictors available | Variance reduction |
+| Lin (2013) | Heterogeneous effects possible | Robust to misspecification |
+| CUPED | Pre-treatment outcome available | Large variance reduction |
+| Stratification FEs | Stratified randomization | Uses design information |
+| HC2 standard errors | Always (in experiments) | Robust to heteroskedasticity |
+| Cluster-robust SEs | Cluster randomization | Correct inference |
+| ITT | Non-compliance present | Always identified |
+| LATE / IV | Want "efficacy" effect | Handles non-compliance |
+| DiD | Panel data (pre/post) | Controls for time-invariant confounders |
+
+---
+
+# Key Takeaways
+
+1. **Difference in means** is the foundation. Regression gives the same answer but scales to covariates.
+
+2. **Covariate adjustment** (Lin 2013, CUPED) reduces variance without introducing bias. Always use pre-treatment data when available.
+
+3. **CUPED is regression.** The $\theta$ is just the OLS coefficient. CUPED is a convenient production implementation.
+
+4. **Robust SEs** (HC2) should be standard. Cluster at the level of randomization.
+
+5. **ITT vs LATE:** Report ITT as the primary result. Use IV for LATE when compliance matters. Never naively regress on take-up.
+
+6. **Pre-analysis plans** separate confirmatory from exploratory analysis. They protect you from yourself.
+
+---
+
+# Exercise Preview
+
+In the exercise you will:
+
+1. Implement CUPED from scratch and verify it matches regression
+2. Compare precision with and without covariate adjustment across 1,000 simulations
+3. Implement Lin's (2013) estimator and compare to naive covariate adjustment
+4. Estimate ITT and LATE with simulated non-compliance data
+5. Run a DiD specification on simulated panel data
+
+See `exercise.R` for the starter code.
+
+---
+class: center, middle, inverse
+
+# Backup Slides
+
+---
+name: cuped-derivation
+
+# Backup: CUPED Derivation
+
+We want to estimate $\tau = E[Y(1)] - E[Y(0)]$ with minimum variance.
+
+**Step 1:** Define a new random variable:
+$$\tilde{Y}_i = Y_i - \theta(X_i - E[X])$$
+
+where $X_i$ is a pre-treatment covariate (e.g., last period's outcome).
+
+--
+
+**Step 2:** The variance of the difference in means of $\tilde{Y}$ is:
+$$\text{Var}(\hat{\tau}_{\text{CUPED}}) = \text{Var}(\hat{\tau}_{\text{raw}}) + \theta^2 \text{Var}(\bar{X}_T - \bar{X}_C) - 2\theta \text{Cov}(\hat{\tau}_{\text{raw}}, \bar{X}_T - \bar{X}_C)$$
+
+--
+
+**Step 3:** Minimize over $\theta$:
+$$\theta^* = \frac{\text{Cov}(Y, X)}{\text{Var}(X)}$$
+
+This is the OLS coefficient from regressing $Y$ on $X$ -- CUPED is regression.
+
+--
+
+**Step 4:** Variance reduction:
+$$\frac{\text{Var}(\hat{\tau}_{\text{CUPED}})}{\text{Var}(\hat{\tau}_{\text{raw}})} = 1 - \text{Corr}(Y, X)^2$$
+
+If $\text{Corr}(Y, X) = 0.7$, variance reduction = 51%.
+
+---
+name: lin-proof
+
+# Backup: Why Lin (2013) Works
+
+The standard covariate-adjusted estimator regresses $Y$ on $D$ and $X$:
+$$Y_i = \alpha + \tau D_i + \beta X_i + \varepsilon_i$$
+
+**Problem:** This constrains the coefficient on $X$ to be the same in treatment and control groups. If the relationship between $X$ and $Y$ differs by treatment status, $\hat{\tau}$ can be biased.
+
+--
+
+**Lin's fix:** Interact the demeaned covariate with treatment:
+$$Y_i = \alpha + \tau D_i + \beta_0 \tilde{X}_i + \beta_1 D_i \tilde{X}_i + \varepsilon_i$$
+where $\tilde{X}_i = X_i - \bar{X}$.
+
+--
+
+**Properties:**
+1. $\hat{\tau}$ is consistent for the ATE regardless of the true data-generating process.
+2. $\hat{\tau}$ is at least as precise as the unadjusted estimator (asymptotically).
+3. With HC2 standard errors, inference is valid even under heteroskedasticity.
+
+**Intuition:** Demeaning ensures the interaction term doesn't shift the intercept. The interaction allows different slopes in each group, avoiding functional form bias.
+
+---
+name: wald-estimator
+
+# Backup: The Wald Estimator (LATE)
+
+With one-sided non-compliance (only treatment group can take treatment):
+
+$$\text{LATE} = \frac{\text{ITT}}{\text{compliance rate}} = \frac{E[Y | Z=1] - E[Y | Z=0]}{E[D | Z=1] - E[D | Z=0]}$$
+
+--
+
+where $Z$ = assignment, $D$ = actual treatment take-up.
+
+This is equivalent to 2SLS with $Z$ as an instrument for $D$.
+
+**Required assumptions:**
+1. **Relevance:** $Z$ affects $D$ (first stage is strong)
+2. **Independence:** $Z$ is randomly assigned
+3. **Exclusion restriction:** $Z$ affects $Y$ only through $D$
+4. **Monotonicity:** No "defiers" (no one does the opposite of their assignment)
+
+Under these assumptions, LATE identifies the effect on **compliers** -- those who take treatment when assigned to it and don't when assigned to control.
