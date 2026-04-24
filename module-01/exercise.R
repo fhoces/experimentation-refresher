@@ -2,6 +2,10 @@
 # Module 1 Exercise: The Experimental Ideal
 # ============================================================================
 #
+# Setup: when a driver is heading into a zone with higher-than-average
+# subsequent demand, does a push notification affect their decision to
+# accept the next ride offer (and their earnings)?
+#
 # Simulate potential outcomes, demonstrate selection bias, and show why
 # randomization works.
 #
@@ -17,11 +21,11 @@ set.seed(42)
 n <- 1000
 drivers <- tibble(
   driver_id = 1:n,
-  # Unobserved motivation (affects both bonus-seeking and retention)
-  motivation = rnorm(n),
-  # Potential outcomes
-  y0 = rbinom(n, 1, prob = plogis(-0.3 + 0.4 * motivation)),      # without bonus
-  y1 = rbinom(n, 1, prob = plogis(-0.3 + 0.4 * motivation + 0.4)) # with bonus
+  # Unobserved experience (affects both having notifications on and accepting)
+  experience = rnorm(n),
+  # Potential outcomes — LPM: P(Y=1) = 0.4 + 0.2*experience + 0.05*D, clipped
+  y0 = rbinom(n, 1, prob = pmin(1, pmax(0, 0.4 + 0.2 * experience))),
+  y1 = rbinom(n, 1, prob = pmin(1, pmax(0, 0.4 + 0.2 * experience + 0.05)))
 )
 
 # Q1: What is the true ATE? (We can compute it because we have BOTH potential
@@ -29,9 +33,11 @@ drivers <- tibble(
 true_ate <- mean(drivers$y1 - drivers$y0)
 cat("True ATE:", round(true_ate, 3), "\n")
 
-# Q2: What is the true ATT and ATU if motivated drivers self-select into bonus?
+# Q2: What is the true ATT and ATU if experienced drivers self-select into
+#     having notifications enabled?
 drivers <- drivers |>
-  mutate(self_selected = rbinom(n, 1, prob = plogis(0.8 * motivation)))
+  mutate(self_selected = rbinom(n, 1,
+    prob = pmin(1, pmax(0, 0.5 + 0.15 * experience))))
 
 true_att <- mean((drivers$y1 - drivers$y0)[drivers$self_selected == 1])
 true_atu <- mean((drivers$y1 - drivers$y0)[drivers$self_selected == 0])
@@ -61,19 +67,19 @@ cat("  = Naive:", round(true_att + selection_bias, 3), "\n")
 
 # --- 3. Randomization eliminates bias in expectation ------------------------
 
-# Run 1000 simulated RCTs
+# Run 500 simulated RCTs
 sim_rct <- function(i) {
   # Random assignment
-  bonus <- sample(rep(c(0, 1), each = n/2))
+  notification <- sample(rep(c(0, 1), each = n/2))
   # Observed outcome depends on assignment
-  y_obs <- if_else(bonus == 1, drivers$y1, drivers$y0)
+  y_obs <- if_else(notification == 1, drivers$y1, drivers$y0)
   # Simple difference in means
-  mean(y_obs[bonus == 1]) - mean(y_obs[bonus == 0])
+  mean(y_obs[notification == 1]) - mean(y_obs[notification == 0])
 }
 
-rct_estimates <- map_dbl(1:1000, sim_rct)
+rct_estimates <- map_dbl(1:500, sim_rct)
 
-cat("\nMean of 1000 RCT estimates:", round(mean(rct_estimates), 3), "\n")
+cat("\nMean of 500 RCT estimates:", round(mean(rct_estimates), 3), "\n")
 cat("True ATE:", round(true_ate, 3), "\n")
 cat("SD of estimates:", round(sd(rct_estimates), 3), "\n")
 
@@ -84,19 +90,20 @@ ggplot(tibble(est = rct_estimates), aes(est)) +
   geom_histogram(bins = 40, fill = "steelblue", alpha = 0.7) +
   geom_vline(xintercept = true_ate, color = "firebrick",
              linewidth = 1.2, linetype = "dashed") +
-  labs(title = "1,000 Simulated RCTs",
+  labs(title = "500 Simulated RCTs",
        x = "Estimated ATE", y = "Count")
 
 # --- 4. Compare randomized vs observational --------------------------------
 
-# Run 1000 observational (self-selected) studies
+# Run 500 observational (self-selected) studies
 sim_obs <- function(i) {
-  bonus <- rbinom(n, 1, prob = plogis(0.8 * drivers$motivation))
-  y_obs <- if_else(bonus == 1, drivers$y1, drivers$y0)
-  mean(y_obs[bonus == 1]) - mean(y_obs[bonus == 0])
+  prob_notif <- pmin(1, pmax(0, 0.5 + 0.15 * drivers$experience))
+  notification <- rbinom(n, 1, prob = prob_notif)
+  y_obs <- if_else(notification == 1, drivers$y1, drivers$y0)
+  mean(y_obs[notification == 1]) - mean(y_obs[notification == 0])
 }
 
-obs_estimates <- map_dbl(1:1000, sim_obs)
+obs_estimates <- map_dbl(1:500, sim_obs)
 
 # Q7: Fill in the blank to create the comparison plot
 bind_rows(
@@ -114,16 +121,19 @@ bind_rows(
 
 # --- 5. Breaking SUTVA (preview) -------------------------------------------
 
-# Simple interference: treated drivers take more rides, leaving fewer for
-# control drivers. Control group retention DROPS when more drivers are treated.
+# Simple interference: notifying many drivers sends them to the same zone,
+# so each notified driver faces more competition there — the treatment effect
+# shrinks as the treated share rises.
 
 sim_sutva_violation <- function(frac_treated) {
-  bonus <- sample(c(rep(1, n * frac_treated), rep(0, n * (1 - frac_treated))))
-  # Interference: control drivers' retention decreases with treatment fraction
-  interference <- -0.2 * frac_treated * (1 - bonus)
-  y_obs <- rbinom(n, 1, prob = plogis(-0.3 + 0.4 * drivers$motivation[1:n] +
-                                        0.4 * bonus + interference))
-  mean(y_obs[bonus == 1]) - mean(y_obs[bonus == 0])
+  notification <- sample(c(rep(1, n * frac_treated),
+                           rep(0, n * (1 - frac_treated))))
+  # Interference: notified drivers crowd the zone; effect shrinks with frac_treated
+  crowding <- -0.04 * frac_treated * notification
+  prob_y <- pmin(1, pmax(0, 0.4 + 0.2 * drivers$experience[1:n] +
+                              0.05 * notification + crowding))
+  y_obs <- rbinom(n, 1, prob = prob_y)
+  mean(y_obs[notification == 1]) - mean(y_obs[notification == 0])
 }
 
 # Q9: How does the estimated ATE change as we treat more drivers?
@@ -140,10 +150,10 @@ ggplot(sutva_results, aes(frac_treated, estimated_ate)) +
   annotate("text", x = 0.5, y = true_ate + 0.01, label = "True ATE (no interference)",
            color = "firebrick") +
   labs(title = "SUTVA Violation: Estimated ATE Depends on Treatment Fraction",
-       subtitle = "More treated drivers → more interference → more bias",
+       subtitle = "More notified drivers → more crowding in the zone → biased estimate",
        x = "Fraction treated", y = "Estimated ATE")
 
-# Q10: Why does the estimated ATE increase with the treatment fraction?
+# Q10: Why does the estimated ATE change with the treatment fraction?
 #      What does this mean for the validity of the experiment?
 #
 # Your answer:

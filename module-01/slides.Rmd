@@ -12,8 +12,8 @@ output:
 ---
 
 ```{css, echo=FALSE}
-.remark-code, .remark-inline-code { font-size: 80%; }
-.remark-slide-content { padding: 1em 2em; }
+.remark-code, .remark-inline-code { font-size: 16px; }
+.remark-slide-content { padding: 1em 2em; font-size: 21px; }
 .small { font-size: 80%; }
 .tiny { font-size: 65%; }
 .highlight-box {
@@ -28,6 +28,17 @@ output:
   padding: 0.5em 1em;
   margin: 0.5em 0;
 }
+.btn-link {
+  display: inline-block;
+  padding: 0.15em 0.7em;
+  background: #1565c0;
+  color: white !important;
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 0.75em;
+}
+.btn-link:hover { background: #0d47a1; }
+.tight-slide { font-size: 18px !important; }
 ```
 
 ```{r setup, include=FALSE}
@@ -58,9 +69,9 @@ set.seed(42)
 
 ---
 
-# The Setup: A Driver Bonus Experiment
+# The Setup: A Zone-Notification Experiment
 
-A ride-sharing platform wants to know: **does offering a $500 sign-on bonus increase driver retention at 6 months?**
+When a driver is heading into a zone with higher-than-average subsequent demand, a ride-sharing platform wants to know: **does sending the driver a push notification affect their decision to accept the next ride offer — and their earnings?**
 
 --
 
@@ -69,24 +80,28 @@ The product team looks at the data:
 ```{r naive-data, echo=FALSE}
 n <- 1000
 drivers <- tibble(
-  motivation = rnorm(n),
-  # More motivated drivers are more likely to seek out the bonus
-  got_bonus = rbinom(n, 1, prob = plogis(0.8 * motivation)),
-  # Retention depends on motivation AND bonus (true effect = 10pp)
-  retained_6mo = rbinom(n, 1, prob = plogis(-0.3 + 0.4 * motivation +
-                                               0.4 * got_bonus))
+  experience = rnorm(n),
+  # More experienced drivers are more likely to have notifications enabled
+  # LPM for selection: P(D=1) = 0.5 + 0.15 * experience, clipped to [0,1]
+  got_notification = rbinom(n, 1,
+    prob = pmin(1, pmax(0, 0.5 + 0.15 * experience))),
+  # LPM for outcome: P(Y=1) = 0.4 + 0.2*experience + 0.05*D, clipped to [0,1]
+  # True effect of notification on accept rate = 0.05 (5pp)
+  accepted = rbinom(n, 1,
+    prob = pmin(1, pmax(0, 0.4 + 0.2 * experience + 0.05 * got_notification)))
 )
 
 drivers |>
-  group_by(got_bonus) |>
-  summarise(n = n(), retention_rate = mean(retained_6mo)) |>
-  mutate(got_bonus = if_else(got_bonus == 1, "Got bonus", "No bonus")) |>
-  knitr::kable(col.names = c("Group", "N", "Retention rate"), digits = 3)
+  group_by(got_notification) |>
+  summarise(n = n(), accept_rate = mean(accepted)) |>
+  mutate(got_notification = if_else(got_notification == 1,
+                                     "Notified", "Not notified")) |>
+  knitr::kable(col.names = c("Group", "N", "Accept rate"), digits = 3)
 ```
 
 --
 
-"The bonus increases retention by ~15 percentage points! Ship it!"
+"The notification increases accept rate by ~15 percentage points! Ship it!"
 
 ...or does it?
 
@@ -94,18 +109,18 @@ drivers |>
 
 # The Fundamental Problem
 
-We want to know the **causal effect** of the bonus on retention for each driver $i$:
+We want to know the **causal effect** of the notification on each driver $i$'s accept decision:
 
 $$\tau_i = Y_i(1) - Y_i(0)$$
 
 --
 
-| Driver | $Y_i(1)$ (with bonus) | $Y_i(0)$ (without) | Effect |
-|--------|----------------------|---------------------|--------|
-| Alice  | 1 (retained)         | ?                   | ?      |
-| Bob    | ?                    | 0 (churned)         | ?      |
-| Carol  | 1 (retained)         | ?                   | ?      |
-| Dave   | ?                    | 1 (retained)        | ?      |
+| Driver | $Y_i(1)$ (notified) | $Y_i(0)$ (not notified) | Effect |
+|--------|---------------------|--------------------------|--------|
+| Alice  | 1 (accepted)        | ?                        | ?      |
+| Bob    | ?                   | 0 (declined)             | ?      |
+| Carol  | 1 (accepted)        | ?                        | ?      |
+| Dave   | ?                   | 1 (accepted)             | ?      |
 
 --
 
@@ -132,10 +147,11 @@ Even though individual effects are unobservable, we can estimate **averages**:
 --
 
 .highlight-box[
-**When do these differ?** When (1) treatment effects are heterogeneous AND (2) who gets treated is correlated with the effect. Example: if motivated drivers both seek the bonus AND benefit more from it, then ATT > ATE > ATU.
+**When do these differ?** When (1) treatment effects are heterogeneous AND (2) who gets treated is correlated with the effect. Example: if experienced drivers both opt into notifications AND benefit more from them, then ATT > ATE > ATU.
 ]
 
 ---
+name: selection-decomp
 
 # Selection Bias: The Decomposition
 
@@ -152,8 +168,10 @@ $$= \underbrace{E[Y_i(1) - Y_i(0) \mid D_i = 1]}_{\text{ATT}} + \underbrace{E[Y_
 --
 
 .highlight-box[
-**Selection bias** = the difference in *baseline* outcomes between the groups. Drivers who sought out the bonus were more motivated → they would have had higher retention *even without the bonus*.
+**Selection bias** = the difference in *baseline* outcomes between the groups. Drivers who opted into notifications are more experienced → they would have accepted more rides *even without the notification*.
 ]
+
+<a href="#selection-proof" class="btn-link">see proof →</a>
 
 ---
 
@@ -161,39 +179,43 @@ $$= \underbrace{E[Y_i(1) - Y_i(0) \mid D_i = 1]}_{\text{ATT}} + \underbrace{E[Y_
 
 ```{r selection-bias-viz, echo=FALSE, fig.height=4}
 drivers |>
-  mutate(Group = if_else(got_bonus == 1, "Got bonus", "No bonus")) |>
-  ggplot(aes(motivation, fill = Group)) +
+  mutate(Group = if_else(got_notification == 1,
+                          "Notified", "Not notified")) |>
+  ggplot(aes(experience, fill = Group)) +
   geom_density(alpha = 0.5) +
   geom_vline(data = drivers |>
-               group_by(got_bonus) |>
-               summarise(m = mean(motivation)) |>
-               mutate(Group = if_else(got_bonus == 1, "Got bonus", "No bonus")),
+               group_by(got_notification) |>
+               summarise(m = mean(experience)) |>
+               mutate(Group = if_else(got_notification == 1,
+                                       "Notified", "Not notified")),
              aes(xintercept = m, color = Group),
              linetype = "dashed", linewidth = 1) +
   labs(title = "The groups are NOT comparable",
-       subtitle = "Drivers who got the bonus have higher baseline motivation",
-       x = "Motivation (unobserved)", y = "Density") +
+       subtitle = "Drivers who got notifications have higher baseline experience",
+       x = "Experience (unobserved)", y = "Density") +
   theme(legend.position = "top")
 ```
 
-The bonus group has higher motivation on average → higher retention *regardless of the bonus*. The naive estimate conflates the bonus effect with pre-existing differences.
+The notified group has higher experience on average → higher accept rate *regardless of the notification*. The naive estimate conflates the notification effect with pre-existing differences.
 
 ---
 
 # Randomization: The Fix
 
-Randomly assign 500 drivers to bonus, 500 to control:
+Randomly assign 500 drivers to receive the notification, 500 to control:
 
 ```{r randomize}
+set.seed(132)
 n <- 1000
 rct <- tibble(
   driver_id = 1:n,
-  motivation = rnorm(n),
-  # Random assignment — independent of motivation
-  bonus = sample(rep(c(0, 1), each = n/2)),
-  # True effect of bonus = 10pp (0.4 on logit scale)
-  retained = rbinom(n, 1, prob = plogis(-0.3 + 0.4 * motivation +
-                                          0.4 * bonus))
+  experience = rnorm(n),
+  # Random assignment — independent of experience
+  notification = sample(rep(c(0, 1), each = n/2)),
+  # LPM outcome: P(accept) = 0.4 + 0.2*experience + 0.05*notification (clipped)
+  # True effect of notification = 0.05 (5pp)
+  accepted = rbinom(n, 1,
+    prob = pmin(1, pmax(0, 0.4 + 0.2 * experience + 0.05 * notification)))
 )
 ```
 
@@ -201,15 +223,15 @@ rct <- tibble(
 
 ```{r rct-balance, echo=FALSE}
 rct |>
-  group_by(bonus) |>
-  summarise(n = n(), mean_motivation = mean(motivation),
-            retention = mean(retained)) |>
-  mutate(bonus = if_else(bonus == 1, "Bonus", "Control")) |>
-  knitr::kable(digits = 3, col.names = c("Group", "N", "Mean motivation",
-                                          "Retention"))
+  group_by(notification) |>
+  summarise(n = n(), mean_experience = mean(experience),
+            accept_rate = mean(accepted)) |>
+  mutate(notification = if_else(notification == 1, "Notified", "Control")) |>
+  knitr::kable(digits = 3, col.names = c("Group", "N", "Mean experience",
+                                           "Accept rate"))
 ```
 
-Motivation is balanced (by construction). The difference in retention is an unbiased estimate of the ATE.
+Experience is balanced (by construction). The difference in accept rate is an unbiased estimate of the ATE.
 
 ---
 
@@ -242,18 +264,18 @@ $$E[Y \mid D=1] - E[Y \mid D=0] = E[Y(1)] - E[Y(0)] = \text{ATE}$$
 # Simulation: Randomization Works in Expectation
 
 ```{r sim-many-rcts, echo=FALSE, fig.height=3.8}
-true_ate <- mean(plogis(-0.3 + 0.4 * rct$motivation + 0.4) -
-                   plogis(-0.3 + 0.4 * rct$motivation))
+# Under LPM the true ATE is (approximately) the coefficient on D
+true_ate <- 0.05
 
 sim_rct <- function(i) {
-  bonus <- sample(rep(c(0, 1), each = n/2))
-  retained <- rbinom(n, 1, prob = plogis(-0.3 + 0.4 * rct$motivation +
-                                           0.4 * bonus))
-  mean(retained[bonus == 1]) - mean(retained[bonus == 0])
+  notification <- sample(rep(c(0, 1), each = n/2))
+  prob_y <- pmin(1, pmax(0, 0.4 + 0.2 * rct$experience + 0.05 * notification))
+  accepted <- rbinom(n, 1, prob = prob_y)
+  mean(accepted[notification == 1]) - mean(accepted[notification == 0])
 }
 
 estimates <- tibble(
-  estimate = map_dbl(1:1000, sim_rct)
+  estimate = map_dbl(1:500, sim_rct)
 )
 
 ggplot(estimates, aes(estimate)) +
@@ -263,25 +285,32 @@ ggplot(estimates, aes(estimate)) +
   annotate("text", x = true_ate + 0.005, y = 60,
            label = paste("True ATE =", round(true_ate, 3)),
            color = "firebrick", hjust = 0, size = 4) +
-  labs(title = "1,000 simulated RCTs: estimates centered on the truth",
+  labs(title = "500 simulated RCTs: estimates centered on the truth",
        subtitle = "Each bar is one experiment. Variation = sampling noise, not bias.",
-       x = "Estimated ATE (difference in retention rates)", y = "Count")
+       x = "Estimated ATE (difference in accept rates)", y = "Count")
 ```
+
+.small[
+**What sets the spread?** The standard error of the difference in means, $\text{SE} = \sqrt{\sigma_1^2/n_1 + \sigma_0^2/n_0}$. Larger $n$ → narrower; less outcome variance ( $\sigma^2$ ) → narrower. Pre-treatment covariates or stratification can tighten it further (Module 5).
+]
 
 ---
 
 # The Naive Estimate Is Biased
 
+**Naive** = *observational*: no randomization. Drivers self-select into notifications — more experienced drivers opt in with higher probability, $P(D=1) = 0.5 + 0.15 \cdot \text{experience}$ (clipped to $[0,1]$). We then compute the simple difference in accept rates, as if it were an RCT.
+
 ```{r sim-naive, echo=FALSE, fig.height=3.8}
 sim_naive <- function(i) {
-  # Non-random: motivated drivers more likely to get bonus
-  bonus <- rbinom(n, 1, prob = plogis(0.8 * rct$motivation))
-  retained <- rbinom(n, 1, prob = plogis(-0.3 + 0.4 * rct$motivation +
-                                           0.4 * bonus))
-  mean(retained[bonus == 1]) - mean(retained[bonus == 0])
+  # Non-random: LPM for self-selection — more experience → higher P(notif on)
+  prob_notif <- pmin(1, pmax(0, 0.5 + 0.15 * rct$experience))
+  notification <- rbinom(n, 1, prob = prob_notif)
+  prob_y <- pmin(1, pmax(0, 0.4 + 0.2 * rct$experience + 0.05 * notification))
+  accepted <- rbinom(n, 1, prob = prob_y)
+  mean(accepted[notification == 1]) - mean(accepted[notification == 0])
 }
 
-naive_estimates <- tibble(estimate = map_dbl(1:1000, sim_naive))
+naive_estimates <- tibble(estimate = map_dbl(1:500, sim_naive))
 
 bind_rows(
   estimates |> mutate(method = "Randomized"),
@@ -297,7 +326,7 @@ bind_rows(
   theme(legend.position = "top")
 ```
 
-The naive distribution is shifted right — it **overestimates** the effect because motivated drivers both seek the bonus and retain more.
+The naive distribution is shifted right — it **overestimates** the effect because experienced drivers both opt into notifications and accept more.
 
 ---
 
@@ -307,13 +336,15 @@ The naive distribution is shifted right — it **overestimates** the effect beca
 ```{r decompose, echo=FALSE}
 # Compute the decomposition for one observational sample
 set.seed(99)
-bonus_obs <- rbinom(n, 1, prob = plogis(0.8 * rct$motivation))
-y1 <- plogis(-0.3 + 0.4 * rct$motivation + 0.4)  # potential outcome under treatment
-y0 <- plogis(-0.3 + 0.4 * rct$motivation)          # potential outcome under control
+notif_obs <- rbinom(n, 1,
+  prob = pmin(1, pmax(0, 0.5 + 0.15 * rct$experience)))
+# LPM potential outcomes
+y1 <- pmin(1, pmax(0, 0.4 + 0.2 * rct$experience + 0.05))  # under treatment
+y0 <- pmin(1, pmax(0, 0.4 + 0.2 * rct$experience))         # under control
 
-naive_est <- mean(y1[bonus_obs == 1]) - mean(y0[bonus_obs == 0])
-att <- mean(y1[bonus_obs == 1] - y0[bonus_obs == 1])
-sel_bias <- mean(y0[bonus_obs == 1]) - mean(y0[bonus_obs == 0])
+naive_est <- mean(y1[notif_obs == 1]) - mean(y0[notif_obs == 0])
+att <- mean(y1[notif_obs == 1] - y0[notif_obs == 1])
+sel_bias <- mean(y0[notif_obs == 1]) - mean(y0[notif_obs == 0])
 
 tibble(
   Component = c("Naive estimate", "= ATT", "+ Selection bias"),
@@ -325,7 +356,7 @@ tibble(
 
 .pull-right[
 - **ATT** = the real causal effect on treated drivers
-- **Selection bias** = treated drivers had higher $Y(0)$ (they would have retained more even without the bonus)
+- **Selection bias** = treated drivers had higher $Y(0)$ (they would have accepted more even without the notification)
 - **Naive** = ATT + bias → overstates the effect
 ]
 
@@ -333,34 +364,109 @@ tibble(
 
 # ATE vs ATT vs ATU: When It Matters
 
-```{r ate-att, echo=FALSE, fig.height=3.5}
-# Heterogeneous effects: high-motivation drivers benefit less
-rct_het <- tibble(
-  motivation = rnorm(n),
-  effect = 0.6 - 0.3 * motivation,  # less motivated benefit more
-  y0 = plogis(-0.3 + 0.4 * motivation),
-  y1 = plogis(-0.3 + 0.4 * motivation + effect),
-  tau = y1 - y0,
-  got_bonus = rbinom(n, 1, prob = plogis(0.8 * motivation))
-)
+Recap — **ATE**: all drivers · **ATT**: opt-in drivers · **ATU**: non-opt-in drivers.
 
-tibble(
-  Estimand = c("ATE", "ATT", "ATU"),
-  Value = c(mean(rct_het$tau),
-            mean(rct_het$tau[rct_het$got_bonus == 1]),
-            mean(rct_het$tau[rct_het$got_bonus == 0]))
-) |>
-  ggplot(aes(Estimand, Value, fill = Estimand)) +
-  geom_col(show.legend = FALSE, width = 0.5) +
-  geom_text(aes(label = round(Value, 3)), vjust = -0.5, size = 5) +
-  scale_fill_manual(values = c("steelblue", "firebrick", "grey60")) +
-  labs(title = "ATE, ATT, and ATU can differ substantially",
-       subtitle = "Here: less motivated drivers benefit more, but motivated drivers seek the bonus",
-       y = "Average treatment effect") +
-  ylim(0, 0.15)
+**New scenario:** effects are now *heterogeneous* — novices benefit more than experienced drivers. Average still ~5pp, but ATT and ATU diverge.
+
+.pull-left[
+```{r ate-att-dgp}
+# Heterogeneous DGP
+rct_het <- tibble(
+  experience = rnorm(n),
+  tau = pmax(0, 0.05 - 0.05 * experience),
+  y0  = pmin(1, pmax(0, 0.4 + 0.2 * experience)),
+  y1  = pmin(1, pmax(0, y0 + tau)),
+  # self-selected (observational)
+  D_obs = rbinom(n, 1, prob =
+    pmin(1, pmax(0, 0.5 + 0.15 * experience))),
+  # randomized
+  D_rct = sample(rep(c(0, 1), each = n/2))
+)
+```
+]
+
+.pull-right[
+```{r ate-att-out}
+rct_het |>
+  summarise(
+    ATE     = mean(y1 - y0),
+    ATT_obs = mean((y1 - y0)[D_obs == 1]),
+    ATU_obs = mean((y1 - y0)[D_obs == 0]),
+    ATT_rct = mean((y1 - y0)[D_rct == 1]),
+    ATU_rct = mean((y1 - y0)[D_rct == 0])
+  ) |> round(3)
+```
+]
+
+---
+
+# Estimand vs Estimator: Simulation ≠ Reality
+
+**Simulation**: we constructed both `y0` and `y1` for every unit, so `mean(y1 − y0)` gives the *true* ATE. **Reality**: for each unit we observe only one outcome, $Y_i = D_i \cdot y1_i + (1 - D_i) \cdot y0_i$. The other is counterfactual.
+
+.pull-left[
+```{r estimator-code, eval=FALSE}
+rct_het |>
+  mutate(
+    # observed = realized potential
+    Y_obs = if_else(D_obs == 1, y1, y0),
+    Y_rct = if_else(D_rct == 1, y1, y0)
+  ) |>
+  summarise(
+    true_ATE  = mean(y1 - y0),
+    naive_obs = mean(Y_obs[D_obs == 1]) -
+                mean(Y_obs[D_obs == 0]),
+    naive_rct = mean(Y_rct[D_rct == 1]) -
+                mean(Y_rct[D_rct == 0])
+  ) |> round(3)
+```
+]
+
+.pull-right[
+```{r estimator-run, ref.label='estimator-code', echo=FALSE}
 ```
 
-**Interview question:** "We ran an experiment and found a 5% lift. Should we roll out to everyone?" The answer depends on whether the experimental effect (≈ ATE) equals the effect on the marginal users who would adopt (≈ ATU).
+- `true_ATE` requires both potential outcomes → only in simulation.
+- `naive_rct` ≈ `true_ATE` → **RCT identifies ATE** (and ATT, ATU — all equal under randomization).
+- `naive_obs` is biased upward — mixes ATT with selection bias.
+- RCTs don't recover `ATT_obs` (effect on *actual adopters*) — that's external validity (Module 7).
+]
+
+---
+
+# Where Does the Bias Come From?
+
+.pull-left[
+Decompose the naive estimator:
+
+`naive_obs` = `ATT_obs` + selection bias
+
+where selection bias $= E[y_0 \mid D{=}1] - E[y_0 \mid D{=}0]$.
+
+```{r bias-decomp}
+rct_het |>
+  summarise(
+    naive_obs = mean(y1[D_obs == 1]) -
+                mean(y0[D_obs == 0]),
+    ATT_obs   = mean((y1 - y0)[D_obs == 1]),
+    sel_bias  = mean(y0[D_obs == 1]) -
+                mean(y0[D_obs == 0])
+  ) |> round(3)
+```
+]
+
+.pull-right[
+**Two distinct gaps:**
+
+- **ATT_obs vs ATE** (≈ 0.015): driven by *effect heterogeneity* — how much τ varies across who opts in. Modest here.
+- **naive_obs vs ATE** (≈ 0.112): driven by *baseline y0 differences* — experienced drivers have higher y0 **and** opt in more.
+
+.highlight-box[
+**Key intuition:** selection bias knows nothing about the treatment effect. Even if the notification did *nothing*, the naive comparison would still show a ~0.126 gap — just from who selects in.
+]
+]
+
+**ATT / ATU coming up:** M5 (**LATE** = compliers' ATT), M6 (subgroup heterogeneity), M7 (ATT_obs via external validity).
 
 ---
 
@@ -368,15 +474,15 @@ tibble(
 
 Everything so far assumed:
 
-1. **No interference:** Alice's bonus doesn't affect Bob's retention
-2. **No hidden versions:** the bonus is the same for everyone
+1. **No interference:** Alice's notification doesn't affect Bob's accept decision
+2. **No hidden versions:** the notification is the same for everyone
 
 --
 
 .highlight-box[
 In marketplace experiments, **both assumptions are routinely violated:**
-- Giving bonuses to some drivers changes the market for all drivers (more supply → fewer rides per driver)
-- The "same" bonus might be worth different amounts in different cities
+- Notifying many drivers sends them toward the same zone → more supply there, fewer rides per driver; and non-notified drivers face less competition elsewhere
+- The "same" notification has different effects depending on time of day, traffic, and driver earnings downstream
 ]
 
 --
@@ -407,11 +513,27 @@ In the exercise you will:
 
 1. Simulate potential outcomes for 1,000 drivers with heterogeneous effects
 2. Show that the naive comparison is biased (reproduce the decomposition)
-3. Show that randomization eliminates bias in expectation (1,000 simulated RCTs)
+3. Show that randomization eliminates bias in expectation (500 simulated RCTs)
 4. Compute ATE, ATT, ATU and show when they diverge
 5. Break SUTVA in a simple simulation and see what happens to the estimate
 
 See `exercise.R` for the starter code.
+
+---
+
+# Where We Are
+
+<table>
+<tr><th>#</th><th>Module</th><th>Status</th></tr>
+<tr><td><b>1</b></td><td><b>The Experimental Ideal</b></td><td>✓ done</td></tr>
+<tr><td>2</td><td>SUTVA and When It Breaks <i>(next)</i></td><td>up next</td></tr>
+<tr><td>3</td><td>Designing Around Interference</td><td>upcoming</td></tr>
+<tr><td>4</td><td>Power and Sample Size</td><td>upcoming</td></tr>
+<tr><td>5</td><td>Analyzing Experiments</td><td>upcoming</td></tr>
+<tr><td>6</td><td>Multiple Testing & Subgroups</td><td>upcoming</td></tr>
+<tr><td>7</td><td>External Validity</td><td>upcoming</td></tr>
+<tr><td>8</td><td>Advanced Topics</td><td>upcoming</td></tr>
+</table>
 
 ---
 class: center, middle, inverse
@@ -442,3 +564,5 @@ $$= \underbrace{E[Y(1) \mid D=1] - E[Y(0) \mid D=1]}_{\text{ATT}} + \underbrace{
 --
 
 Under randomization, $E[Y(0) \mid D=1] = E[Y(0) \mid D=0]$, so selection bias = 0 and ATT = ATE.
+
+<a href="#selection-decomp" class="btn-link">← back</a>

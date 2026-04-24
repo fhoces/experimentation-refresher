@@ -7,6 +7,8 @@ Proofs in backup slides.
 Applications drawn from ride-sharing platforms, online advertising, and
 academic research.
 
+> **Live slides:** https://fhoces.github.io/experimentation-refresher/
+>
 > **Focus areas:** spillovers, SUTVA violations, external validity, marketplace
 > experiments, power analysis, CUPED, multiple testing.
 
@@ -14,7 +16,7 @@ academic research.
 
 | # | Module | Concepts | Application |
 |---|--------|----------|-------------|
-| 1 | The Experimental Ideal | Potential outcomes, ATE, selection bias, randomization | Driver bonus retention experiment |
+| **1** | [The Experimental Ideal](module-01/) ([slides](https://fhoces.github.io/experimentation-refresher/module-01/slides.html)) | Potential outcomes, ATE, selection bias, randomization | Zone-notification driver experiment |
 | 2 | SUTVA and When It Breaks | Interference, marketplace effects, network spillovers | Two-sided market contamination |
 | 3 | Designing Around Interference | Cluster randomization, switchback, geo experiments | City-level pricing experiments |
 | 4 | Power and Sample Size | MDE, simulation-based power, clustering effects, ICC | A/B test planning for ad formats |

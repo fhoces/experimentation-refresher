@@ -22,8 +22,8 @@ class: center, middle, inverse, title-slide
 
 
 &lt;style type="text/css"&gt;
-.remark-code, .remark-inline-code { font-size: 80%; }
-.remark-slide-content { padding: 1em 2em; }
+.remark-code, .remark-inline-code { font-size: 16px; }
+.remark-slide-content { padding: 1em 2em; font-size: 21px; }
 .small { font-size: 80%; }
 .tiny { font-size: 65%; }
 .highlight-box {
@@ -38,6 +38,17 @@ class: center, middle, inverse, title-slide
   padding: 0.5em 1em;
   margin: 0.5em 0;
 }
+.btn-link {
+  display: inline-block;
+  padding: 0.15em 0.7em;
+  background: #1565c0;
+  color: white !important;
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 0.75em;
+}
+.btn-link:hover { background: #0d47a1; }
+.tight-slide { font-size: 18px !important; }
 &lt;/style&gt;
 
 
@@ -58,23 +69,23 @@ class: center, middle, inverse, title-slide
 
 ---
 
-# The Setup: A Driver Bonus Experiment
+# The Setup: A Zone-Notification Experiment
 
-A ride-sharing platform wants to know: **does offering a $500 sign-on bonus increase driver retention at 6 months?**
+When a driver is heading into a zone with higher-than-average subsequent demand, a ride-sharing platform wants to know: **does sending the driver a push notification affect their decision to accept the next ride offer — and their earnings?**
 
 --
 
 The product team looks at the data:
 
 
-|Group     |   N| Retention rate|
-|:---------|---:|--------------:|
-|No bonus  | 494|          0.427|
-|Got bonus | 506|          0.514|
+|Group        |   N| Accept rate|
+|:------------|---:|-----------:|
+|Not notified | 489|       0.342|
+|Notified     | 511|       0.481|
 
 --
 
-"The bonus increases retention by ~15 percentage points! Ship it!"
+"The notification increases accept rate by ~15 percentage points! Ship it!"
 
 ...or does it?
 
@@ -82,18 +93,18 @@ The product team looks at the data:
 
 # The Fundamental Problem
 
-We want to know the **causal effect** of the bonus on retention for each driver `\(i\)`:
+We want to know the **causal effect** of the notification on each driver `\(i\)`'s accept decision:
 
 `$$\tau_i = Y_i(1) - Y_i(0)$$`
 
 --
 
-| Driver | `\(Y_i(1)\)` (with bonus) | `\(Y_i(0)\)` (without) | Effect |
-|--------|----------------------|---------------------|--------|
-| Alice  | 1 (retained)         | ?                   | ?      |
-| Bob    | ?                    | 0 (churned)         | ?      |
-| Carol  | 1 (retained)         | ?                   | ?      |
-| Dave   | ?                    | 1 (retained)        | ?      |
+| Driver | `\(Y_i(1)\)` (notified) | `\(Y_i(0)\)` (not notified) | Effect |
+|--------|---------------------|--------------------------|--------|
+| Alice  | 1 (accepted)        | ?                        | ?      |
+| Bob    | ?                   | 0 (declined)             | ?      |
+| Carol  | 1 (accepted)        | ?                        | ?      |
+| Dave   | ?                   | 1 (accepted)             | ?      |
 
 --
 
@@ -120,10 +131,11 @@ Even though individual effects are unobservable, we can estimate **averages**:
 --
 
 .highlight-box[
-**When do these differ?** When (1) treatment effects are heterogeneous AND (2) who gets treated is correlated with the effect. Example: if motivated drivers both seek the bonus AND benefit more from it, then ATT &gt; ATE &gt; ATU.
+**When do these differ?** When (1) treatment effects are heterogeneous AND (2) who gets treated is correlated with the effect. Example: if experienced drivers both opt into notifications AND benefit more from them, then ATT &gt; ATE &gt; ATU.
 ]
 
 ---
+name: selection-decomp
 
 # Selection Bias: The Decomposition
 
@@ -140,8 +152,10 @@ This equals:
 --
 
 .highlight-box[
-**Selection bias** = the difference in *baseline* outcomes between the groups. Drivers who sought out the bonus were more motivated → they would have had higher retention *even without the bonus*.
+**Selection bias** = the difference in *baseline* outcomes between the groups. Drivers who opted into notifications are more experienced → they would have accepted more rides *even without the notification*.
 ]
+
+&lt;a href="#selection-proof" class="btn-link"&gt;see proof →&lt;/a&gt;
 
 ---
 
@@ -149,37 +163,39 @@ This equals:
 
 &lt;img src="slides_files/figure-html/selection-bias-viz-1.png" style="display: block; margin: auto;" /&gt;
 
-The bonus group has higher motivation on average → higher retention *regardless of the bonus*. The naive estimate conflates the bonus effect with pre-existing differences.
+The notified group has higher experience on average → higher accept rate *regardless of the notification*. The naive estimate conflates the notification effect with pre-existing differences.
 
 ---
 
 # Randomization: The Fix
 
-Randomly assign 500 drivers to bonus, 500 to control:
+Randomly assign 500 drivers to receive the notification, 500 to control:
 
 
 ```r
+set.seed(132)
 n &lt;- 1000
 rct &lt;- tibble(
   driver_id = 1:n,
-  motivation = rnorm(n),
-  # Random assignment — independent of motivation
-  bonus = sample(rep(c(0, 1), each = n/2)),
-  # True effect of bonus = 10pp (0.4 on logit scale)
-  retained = rbinom(n, 1, prob = plogis(-0.3 + 0.4 * motivation +
-                                          0.4 * bonus))
+  experience = rnorm(n),
+  # Random assignment — independent of experience
+  notification = sample(rep(c(0, 1), each = n/2)),
+  # LPM outcome: P(accept) = 0.4 + 0.2*experience + 0.05*notification (clipped)
+  # True effect of notification = 0.05 (5pp)
+  accepted = rbinom(n, 1,
+    prob = pmin(1, pmax(0, 0.4 + 0.2 * experience + 0.05 * notification)))
 )
 ```
 
 --
 
 
-|Group   |   N| Mean motivation| Retention|
-|:-------|---:|---------------:|---------:|
-|Control | 500|           0.071|     0.408|
-|Bonus   | 500|          -0.077|     0.522|
+|Group    |   N| Mean experience| Accept rate|
+|:--------|---:|---------------:|-----------:|
+|Control  | 500|           0.011|       0.402|
+|Notified | 500|           0.015|       0.452|
 
-Motivation is balanced (by construction). The difference in retention is an unbiased estimate of the ATE.
+Experience is balanced (by construction). The difference in accept rate is an unbiased estimate of the ATE.
 
 ---
 
@@ -213,13 +229,19 @@ So the simple difference in means equals the ATE:
 
 &lt;img src="slides_files/figure-html/sim-many-rcts-1.png" style="display: block; margin: auto;" /&gt;
 
+.small[
+**What sets the spread?** The standard error of the difference in means, `\(\text{SE} = \sqrt{\sigma_1^2/n_1 + \sigma_0^2/n_0}\)`. Larger `\(n\)` → narrower; less outcome variance ( `\(\sigma^2\)` ) → narrower. Pre-treatment covariates or stratification can tighten it further (Module 5).
+]
+
 ---
 
 # The Naive Estimate Is Biased
 
+**Naive** = *observational*: no randomization. Drivers self-select into notifications — more experienced drivers opt in with higher probability, `\(P(D=1) = 0.5 + 0.15 \cdot \text{experience}\)` (clipped to `\([0,1]\)`). We then compute the simple difference in accept rates, as if it were an RCT.
+
 &lt;img src="slides_files/figure-html/sim-naive-1.png" style="display: block; margin: auto;" /&gt;
 
-The naive distribution is shifted right — it **overestimates** the effect because motivated drivers both seek the bonus and retain more.
+The naive distribution is shifted right — it **overestimates** the effect because experienced drivers both opt into notifications and accept more.
 
 ---
 
@@ -229,14 +251,14 @@ The naive distribution is shifted right — it **overestimates** the effect beca
 
 |Component        | Value|
 |:----------------|-----:|
-|Naive estimate   | 0.154|
-|= ATT            | 0.096|
-|+ Selection bias | 0.058|
+|Naive estimate   | 0.163|
+|= ATT            | 0.050|
+|+ Selection bias | 0.113|
 ]
 
 .pull-right[
 - **ATT** = the real causal effect on treated drivers
-- **Selection bias** = treated drivers had higher `\(Y(0)\)` (they would have retained more even without the bonus)
+- **Selection bias** = treated drivers had higher `\(Y(0)\)` (they would have accepted more even without the notification)
 - **Naive** = ATT + bias → overstates the effect
 ]
 
@@ -244,9 +266,132 @@ The naive distribution is shifted right — it **overestimates** the effect beca
 
 # ATE vs ATT vs ATU: When It Matters
 
-&lt;img src="slides_files/figure-html/ate-att-1.png" style="display: block; margin: auto;" /&gt;
+Recap — **ATE**: all drivers · **ATT**: opt-in drivers · **ATU**: non-opt-in drivers.
 
-**Interview question:** "We ran an experiment and found a 5% lift. Should we roll out to everyone?" The answer depends on whether the experimental effect (≈ ATE) equals the effect on the marginal users who would adopt (≈ ATU).
+**New scenario:** effects are now *heterogeneous* — novices benefit more than experienced drivers. Average still ~5pp, but ATT and ATU diverge.
+
+.pull-left[
+
+```r
+# Heterogeneous DGP
+rct_het &lt;- tibble(
+  experience = rnorm(n),
+  tau = pmax(0, 0.05 - 0.05 * experience),
+  y0  = pmin(1, pmax(0, 0.4 + 0.2 * experience)),
+  y1  = pmin(1, pmax(0, y0 + tau)),
+  # self-selected (observational)
+  D_obs = rbinom(n, 1, prob =
+    pmin(1, pmax(0, 0.5 + 0.15 * experience))),
+  # randomized
+  D_rct = sample(rep(c(0, 1), each = n/2))
+)
+```
+]
+
+.pull-right[
+
+```r
+rct_het |&gt;
+  summarise(
+    ATE     = mean(y1 - y0),
+    ATT_obs = mean((y1 - y0)[D_obs == 1]),
+    ATU_obs = mean((y1 - y0)[D_obs == 0]),
+    ATT_rct = mean((y1 - y0)[D_rct == 1]),
+    ATU_rct = mean((y1 - y0)[D_rct == 0])
+  ) |&gt; round(3)
+```
+
+```
+## # A tibble: 1 × 5
+##     ATE ATT_obs ATU_obs ATT_rct ATU_rct
+##   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;
+## 1 0.054   0.039   0.068   0.054   0.053
+```
+]
+
+---
+
+# Estimand vs Estimator: Simulation ≠ Reality
+
+**Simulation**: we constructed both `y0` and `y1` for every unit, so `mean(y1 − y0)` gives the *true* ATE. **Reality**: for each unit we observe only one outcome, `\(Y_i = D_i \cdot y1_i + (1 - D_i) \cdot y0_i\)`. The other is counterfactual.
+
+.pull-left[
+
+```r
+rct_het |&gt;
+  mutate(
+    # observed = realized potential
+    Y_obs = if_else(D_obs == 1, y1, y0),
+    Y_rct = if_else(D_rct == 1, y1, y0)
+  ) |&gt;
+  summarise(
+    true_ATE  = mean(y1 - y0),
+    naive_obs = mean(Y_obs[D_obs == 1]) -
+                mean(Y_obs[D_obs == 0]),
+    naive_rct = mean(Y_rct[D_rct == 1]) -
+                mean(Y_rct[D_rct == 0])
+  ) |&gt; round(3)
+```
+]
+
+.pull-right[
+
+```
+## # A tibble: 1 × 3
+##   true_ATE naive_obs naive_rct
+##      &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;
+## 1    0.054     0.166     0.048
+```
+
+- `true_ATE` requires both potential outcomes → only in simulation.
+- `naive_rct` ≈ `true_ATE` → **RCT identifies ATE** (and ATT, ATU — all equal under randomization).
+- `naive_obs` is biased upward — mixes ATT with selection bias.
+- RCTs don't recover `ATT_obs` (effect on *actual adopters*) — that's external validity (Module 7).
+]
+
+---
+
+# Where Does the Bias Come From?
+
+.pull-left[
+Decompose the naive estimator:
+
+`naive_obs` = `ATT_obs` + selection bias
+
+where selection bias `\(= E[y_0 \mid D{=}1] - E[y_0 \mid D{=}0]\)`.
+
+
+```r
+rct_het |&gt;
+  summarise(
+    naive_obs = mean(y1[D_obs == 1]) -
+                mean(y0[D_obs == 0]),
+    ATT_obs   = mean((y1 - y0)[D_obs == 1]),
+    sel_bias  = mean(y0[D_obs == 1]) -
+                mean(y0[D_obs == 0])
+  ) |&gt; round(3)
+```
+
+```
+## # A tibble: 1 × 3
+##   naive_obs ATT_obs sel_bias
+##       &lt;dbl&gt;   &lt;dbl&gt;    &lt;dbl&gt;
+## 1     0.166   0.039    0.126
+```
+]
+
+.pull-right[
+**Two distinct gaps:**
+
+- **ATT_obs vs ATE** (≈ 0.015): driven by *effect heterogeneity* — how much τ varies across who opts in. Modest here.
+- **naive_obs vs ATE** (≈ 0.112): driven by *baseline y0 differences* — experienced drivers have higher y0 **and** opt in more.
+
+.highlight-box[
+**Key intuition:** selection bias knows nothing about the treatment effect. Even if the notification did *nothing*, the naive comparison would still show a ~0.126 gap — just from who selects in.
+]
+]
+
+**ATT / ATU coming up:** M5 (**LATE** = compliers' ATT), M6 (subgroup heterogeneity), M7 (ATT_obs via external validity).
 
 ---
 
@@ -254,15 +399,15 @@ The naive distribution is shifted right — it **overestimates** the effect beca
 
 Everything so far assumed:
 
-1. **No interference:** Alice's bonus doesn't affect Bob's retention
-2. **No hidden versions:** the bonus is the same for everyone
+1. **No interference:** Alice's notification doesn't affect Bob's accept decision
+2. **No hidden versions:** the notification is the same for everyone
 
 --
 
 .highlight-box[
 In marketplace experiments, **both assumptions are routinely violated:**
-- Giving bonuses to some drivers changes the market for all drivers (more supply → fewer rides per driver)
-- The "same" bonus might be worth different amounts in different cities
+- Notifying many drivers sends them toward the same zone → more supply there, fewer rides per driver; and non-notified drivers face less competition elsewhere
+- The "same" notification has different effects depending on time of day, traffic, and driver earnings downstream
 ]
 
 --
@@ -293,11 +438,27 @@ In the exercise you will:
 
 1. Simulate potential outcomes for 1,000 drivers with heterogeneous effects
 2. Show that the naive comparison is biased (reproduce the decomposition)
-3. Show that randomization eliminates bias in expectation (1,000 simulated RCTs)
+3. Show that randomization eliminates bias in expectation (500 simulated RCTs)
 4. Compute ATE, ATT, ATU and show when they diverge
 5. Break SUTVA in a simple simulation and see what happens to the estimate
 
 See `exercise.R` for the starter code.
+
+---
+
+# Where We Are
+
+&lt;table&gt;
+&lt;tr&gt;&lt;th&gt;#&lt;/th&gt;&lt;th&gt;Module&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;b&gt;1&lt;/b&gt;&lt;/td&gt;&lt;td&gt;&lt;b&gt;The Experimental Ideal&lt;/b&gt;&lt;/td&gt;&lt;td&gt;✓ done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;2&lt;/td&gt;&lt;td&gt;SUTVA and When It Breaks &lt;i&gt;(next)&lt;/i&gt;&lt;/td&gt;&lt;td&gt;up next&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;3&lt;/td&gt;&lt;td&gt;Designing Around Interference&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;4&lt;/td&gt;&lt;td&gt;Power and Sample Size&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;5&lt;/td&gt;&lt;td&gt;Analyzing Experiments&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;6&lt;/td&gt;&lt;td&gt;Multiple Testing &amp; Subgroups&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;7&lt;/td&gt;&lt;td&gt;External Validity&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;8&lt;/td&gt;&lt;td&gt;Advanced Topics&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
 
 ---
 class: center, middle, inverse
@@ -328,6 +489,8 @@ Add and subtract `\(E[Y(0) \mid D=1]\)`:
 --
 
 Under randomization, `\(E[Y(0) \mid D=1] = E[Y(0) \mid D=0]\)`, so selection bias = 0 and ATT = ATE.
+
+&lt;a href="#selection-decomp" class="btn-link"&gt;← back&lt;/a&gt;
     </textarea>
 <style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
 <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>

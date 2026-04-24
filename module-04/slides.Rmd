@@ -45,7 +45,7 @@ set.seed(42)
 
 <table>
 <tr><th>#</th><th>Module</th><th>Status</th></tr>
-<tr><td>1</td><td>The Experimental Ideal</td><td>done</td></tr>
+<tr><td>1</td><td><a href="../module-01/slides.html">The Experimental Ideal</a></td><td>✓ done</td></tr>
 <tr><td>2</td><td>SUTVA and When It Breaks</td><td>done</td></tr>
 <tr><td>3</td><td>Designing Around Interference</td><td>done</td></tr>
 <tr><td><b>4</b></td><td><b>Power and Sample Size</b> <i>(you are here)</i></td><td>current</td></tr>
