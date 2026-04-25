@@ -29,8 +29,9 @@ $\mathbf{D}$, and there are $2^N$ potential outcomes per unit instead of 2.
   side) -- more drivers means shorter wait times for riders.
 - Treating riders (demand side) changes outcomes for drivers -- more ride
   requests means more revenue per driver.
-- Within the same side: treating some drivers with a bonus makes them take
-  more rides, reducing ride availability for control drivers.
+- Within the same side: notifying some drivers about a high-demand zone
+  sends them all there; the zone saturates and each notified driver takes
+  fewer rides than the notification alone would give.
 
 **Network interference:**
 - In social networks: treating user A with a new feature might change user

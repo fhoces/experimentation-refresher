@@ -28,6 +28,19 @@ output:
   padding: 0.5em 1em;
   margin: 0.5em 0;
 }
+.nav-btn {
+  position: absolute;
+  bottom: 12px;
+  left: 40px;
+  font-size: 11px;
+  background: #e8eaf6;
+  padding: 2px 8px;
+  border-radius: 3px;
+  z-index: 100;
+  text-decoration: none;
+  color: #1a237e;
+}
+.nav-btn:hover { background: #c5cae9; }
 ```
 
 ```{r setup, include=FALSE}
@@ -71,47 +84,47 @@ But this result relied on an assumption we barely mentioned:
 **SUTVA (Stable Unit Treatment Value Assumption):** Each unit's outcome depends *only* on its own treatment assignment, not on anyone else's.
 ]
 
---
-
 Today: what happens when SUTVA breaks, why it almost always breaks in marketplace experiments, and how to detect the problem.
 
 ---
 
-# The Setup: Driver Bonus Experiment (Again)
+# The Setup: Zone-Notification Experiment (Again)
 
-Same experiment as Module 1: randomize 500 drivers to a $500 bonus, 500 to control. Measure 6-month retention.
+Same experiment as Module 1: randomize 500 drivers to receive the zone notification, 500 to control. Measure accept rate.
 
 ```{r setup-data, echo=FALSE}
 n <- 1000
 drivers <- tibble(
   driver_id = 1:n,
-  skill = rnorm(n),
-  p_retain_0 = plogis(-0.5 + 0.3 * skill),
-  p_retain_1 = plogis(-0.5 + 0.3 * skill + 0.5)
+  experience = rnorm(n),
+  # LPM potential outcomes (clipped to [0,1])
+  y0 = pmin(1, pmax(0, 0.4 + 0.2 * experience)),
+  y1 = pmin(1, pmax(0, 0.4 + 0.2 * experience + 0.05))
 )
-true_ate <- mean(drivers$p_retain_1 - drivers$p_retain_0)
+true_ate <- mean(drivers$y1 - drivers$y0)
 ```
 
 But now let's think about what happens in the **marketplace**...
 
 --
 
-- Bonus drivers are more motivated and take **more rides**
-- The total number of ride requests is roughly fixed (in the short run)
-- More rides for treated drivers = **fewer rides for control drivers**
-- Control drivers earn less = **lower retention** (even without the bonus effect)
+- Notified drivers all head toward the **same high-demand zone**
+- The zone has limited ride requests — more drivers there means **more competition for each ride**
+- Each notified driver takes fewer rides than the notification *alone* would give them
+- Non-notified drivers stay in their original areas, largely unaffected
 
 --
 
 .highlight-box[
-The control group outcome is *contaminated* by the treatment. The naive ATE will be **biased upward** -- it captures the direct bonus effect PLUS the harm to the control group.
+The **treated group** outcome is *contaminated* by the treatment itself (crowding). The naive ATE will be **biased downward** — it captures the direct notification effect MINUS the crowding among the treated.
 ]
 
 ---
+name: sutva-main
 
 # SUTVA: Stated Precisely
 
-**Component 1 -- No interference:**
+**Component 1 — No interference:**
 
 $$Y_i = Y_i(D_i) \quad \text{for all } i$$
 
@@ -119,7 +132,7 @@ Unit $i$'s outcome depends only on $i$'s treatment. Not on $D_j$ for any $j \neq
 
 --
 
-**Component 2 -- No hidden versions of treatment:**
+**Component 2 — No hidden versions of treatment:**
 
 If $D_i = D_i' = 1$, then $Y_i(D_i) = Y_i(D_i')$. There is one "treated" state and one "control" state.
 
@@ -133,57 +146,72 @@ When SUTVA fails: potential outcomes depend on the **entire** treatment vector $
 With $N$ units, there are $2^N$ possible treatment vectors. Each unit has $2^N$ potential outcomes instead of $2$. The ATE is no longer well-defined without specifying $\mathbf{D}$.
 ]
 
-<a href="#sutva-formal" style="position:absolute; bottom:12px; left:40px; font-size:11px; background:#e8eaf6; padding:2px 8px; border-radius:3px; z-index:100;">Formal notation</a>
+<a href="#sutva-formal" class="nav-btn">Formal notation</a>
 
 ---
+name: sim-main
 
 # Seeing the Bias: A Simulation
 
-```{r interference-sim, echo=FALSE, fig.height=4}
-sim_marketplace <- function(interference_strength) {
-  bonus <- sample(rep(c(0, 1), each = n / 2))
-  frac_treated <- mean(bonus)
-  interference <- -interference_strength * frac_treated * (1 - bonus)
-  y_obs <- rbinom(n, 1, prob = plogis(-0.5 + 0.3 * drivers$skill +
-                                        0.5 * bonus + interference))
-  mean(y_obs[bonus == 1]) - mean(y_obs[bonus == 0])
+```{r interference-sim, echo=FALSE, fig.height=4.6}
+sim_marketplace <- function(interference_strength = 0.15,
+                            frac_treated = 0.5) {
+  n_t <- round(n * frac_treated)
+  notification <- sample(c(rep(1, n_t), rep(0, n - n_t)))
+
+  # Potential outcomes (probabilities). Crowding shrinks y1 by the
+  # treated share; control drivers (y0) are unaffected.
+  y0 <- pmin(1, pmax(0, 0.4 + 0.2 * drivers$experience))
+  y1 <- pmin(1, pmax(0, 0.4 + 0.2 * drivers$experience + 0.05 -
+                          interference_strength * frac_treated))
+
+  # Observed outcome based on assignment
+  y_obs <- rbinom(n, 1, prob = if_else(notification == 1, y1, y0))
+  mean(y_obs[notification == 1]) - mean(y_obs[notification == 0])
 }
 
-estimates_clean <- replicate(1000, sim_marketplace(0))
-estimates_dirty <- replicate(1000, sim_marketplace(0.4))
+estimates_df <- bind_rows(
+  tibble(est = replicate(1000, sim_marketplace(0,    0.5)),
+         scenario = "No interference",   panel = "50% of drivers treated"),
+  tibble(est = replicate(1000, sim_marketplace(0.15, 0.5)),
+         scenario = "With interference", panel = "50% of drivers treated"),
+  tibble(est = replicate(1000, sim_marketplace(0,    0.7)),
+         scenario = "No interference",   panel = "70% of drivers treated"),
+  tibble(est = replicate(1000, sim_marketplace(0.15, 0.7)),
+         scenario = "With interference", panel = "70% of drivers treated")
+)
 
-bind_rows(
-  tibble(est = estimates_clean, scenario = "No interference"),
-  tibble(est = estimates_dirty, scenario = "With interference")
-) |>
-  ggplot(aes(est, fill = scenario)) +
+ggplot(estimates_df, aes(est, fill = scenario)) +
   geom_histogram(bins = 40, alpha = 0.6, position = "identity") +
   geom_vline(xintercept = true_ate, color = "firebrick",
-             linewidth = 1.2, linetype = "dashed") +
-  annotate("text", x = true_ate + 0.005, y = 55,
-           label = paste("True ATE =", round(true_ate, 3)),
-           color = "firebrick", hjust = 0, size = 4) +
+             linewidth = 1, linetype = "dashed") +
+  facet_wrap(~ panel, ncol = 1) +
   scale_fill_manual(values = c("steelblue", "darkorange")) +
-  labs(title = "Interference biases the ATE upward",
-       subtitle = "Control drivers are harmed by treatment -> naive effect is too large",
+  labs(title = "More drivers treated → more bias",
+       subtitle = paste("True ATE =", round(true_ate, 3),
+                        "(red dashed). Interference strength = 0.15 in dirty runs."),
        x = "Estimated ATE", y = "Count") +
   theme(legend.position = "top")
 ```
+
+<a href="#sim-dgp" class="nav-btn">DGP behind this plot</a>
 
 ---
 
 # Where Does the Bias Come From?
 
 .pull-left[
-**Without interference:**
-- $E[Y(0) \mid D=0]$ = true control outcome
-- $E[Y(1) \mid D=1]$ = true treated outcome
-- Difference = ATE
+**Violated SUTVA component: *no interference*.**
 
-**With interference:**
-- $E[Y(0) \mid D=0]$ is **too low** (control drivers harmed)
-- $E[Y(1) \mid D=1]$ is roughly correct
-- Difference = ATE + bias
+SUTVA requires $Y_i = Y_i(D_i)$ — the outcome depends only on $i$'s own treatment. Here it doesn't:
+
+$$Y_i(1, \mathbf{D}_{-i}) \;\neq\; Y_i(1, \mathbf{D}_{-i}')$$
+
+**Mechanism:** the more drivers are notified, the more crowded the zone — so each treated driver gets fewer rides. $Y_i(1)$ depends on how many *others* are treated.
+
+**What stays put:** control drivers don't go to the zone, so $Y_i(0)$ is unaffected.
+
+So $E[Y \mid D=1]$ is pulled down while $E[Y \mid D=0]$ is fine → naive ATE is biased *downward*.
 ]
 
 .pull-right[
@@ -191,17 +219,18 @@ bind_rows(
 tibble(
   Group = rep(c("Control", "Treated"), each = 2),
   Scenario = rep(c("No interference", "With interference"), 2),
-  Retention = c(
-    mean(drivers$p_retain_0),
-    mean(drivers$p_retain_0) - 0.04,  # interference reduces control
-    mean(drivers$p_retain_1),
-    mean(drivers$p_retain_1)   # treated unaffected
+  AcceptRate = c(
+    mean(drivers$y0),
+    mean(drivers$y0),              # control unaffected
+    mean(drivers$y1),
+    mean(drivers$y1) - 0.03        # treated crowded down
   )
 ) |>
-  ggplot(aes(Group, Retention, fill = Scenario)) +
+  ggplot(aes(Group, AcceptRate, fill = Scenario)) +
   geom_col(position = "dodge", width = 0.6) +
   scale_fill_manual(values = c("steelblue", "darkorange")) +
-  labs(title = "Interference pushes control\nretention DOWN") +
+  labs(title = "Interference pulls treated\naccept rate DOWN",
+       y = "Accept rate") +
   theme(legend.position = "top")
 ```
 ]
@@ -211,7 +240,7 @@ tibble(
 # The Bias Grows with Interference Strength
 
 ```{r bias-vs-strength, echo=FALSE, fig.height=3.8}
-strengths <- seq(0, 0.8, by = 0.05)
+strengths <- seq(0, 0.3, by = 0.02)
 bias_results <- tibble(
   interference = strengths,
   mean_ate = map_dbl(strengths, ~ mean(replicate(300, sim_marketplace(.x))))
@@ -221,14 +250,14 @@ ggplot(bias_results, aes(interference, mean_ate)) +
   geom_line(linewidth = 1.2, color = "steelblue") +
   geom_point(size = 2) +
   geom_hline(yintercept = true_ate, linetype = "dashed", color = "firebrick") +
-  annotate("text", x = 0.5, y = true_ate + 0.005,
+  annotate("text", x = 0.2, y = true_ate + 0.003,
            label = "True ATE", color = "firebrick", size = 4) +
   labs(title = "Stronger interference = more bias",
        x = "Interference strength parameter",
        y = "Mean estimated ATE (over 300 simulations)")
 ```
 
-In a real marketplace, interference strength depends on market thickness (how tight supply is), substitutability, and network density.
+In a real marketplace, interference strength depends on **market thickness** (how tight supply is), **substitutability**, and **network density**.
 
 ---
 
@@ -240,9 +269,9 @@ SUTVA also requires **one version** of treatment. This can fail when:
 
 .pull-left[
 **The treatment differs by context:**
-- A $500 bonus in San Francisco vs. rural Iowa
-- A new algorithm in a thick market vs. thin market
-- Same nudge email, but recipient has 1 co-author vs. 10
+- Zone notification in San Francisco vs. rural Iowa
+- A new routing algorithm in a thick market vs. thin market
+- "Same" notification arrives during morning rush vs. midday
 ]
 
 --
@@ -250,8 +279,8 @@ SUTVA also requires **one version** of treatment. This can fail when:
 .pull-right[
 **The treatment differs by implementation:**
 - New driver app version with different bugs on iOS vs. Android
-- "Same" coupon delivered via email vs. push notification
-- Treatment intensity varies (some drivers get reminded, others don't)
+- "Same" notification delivered via in-app banner vs. push
+- Treatment intensity varies (some drivers get re-notified, others don't)
 ]
 
 --
@@ -270,7 +299,7 @@ In tech, the three most common SUTVA violations are:
 
 **1. Marketplace interference** (ride-sharing, food delivery, e-commerce)
 - Supply and demand are linked: treating one side affects the other
-- "We tested a new surge algorithm on 10% of riders" -- but those riders affect driver allocation for everyone
+- "We tested a new routing algorithm on 10% of riders" — but those riders affect driver allocation for everyone
 
 --
 
@@ -289,17 +318,15 @@ In tech, the three most common SUTVA violations are:
 # Application: Marketplace Interference in Detail
 
 ```{r marketplace-diagram, echo=FALSE, fig.height=4}
-# Simulate a simple supply-demand marketplace
+# Simulate a simple supply-demand marketplace at the zone
 set.seed(123)
-n_drivers <- 200
-n_riders <- 150
 
 market <- tibble(
   period = rep(c("Before experiment", "During experiment"), each = 2),
-  side = rep(c("Treated drivers", "Control drivers"), 2),
+  side = rep(c("Notified drivers (in zone)", "Control drivers (elsewhere)"), 2),
   rides_per_driver = c(
     3.0, 3.0,   # Before: equal
-    3.8, 2.2    # During: treated take more, control get fewer
+    2.4, 3.0    # During: too many notified drivers crowd the zone
   )
 )
 
@@ -309,8 +336,8 @@ ggplot(market, aes(side, rides_per_driver, fill = period)) +
   geom_hline(yintercept = 3.0, linetype = "dashed", color = "firebrick") +
   annotate("text", x = 2.5, y = 3.1, label = "Pre-experiment average",
            color = "firebrick", size = 3.5) +
-  labs(title = "Marketplace interference: a zero-sum game",
-       subtitle = "Total rides are ~fixed. Bonus drivers capture more -> control drivers get fewer.",
+  labs(title = "Marketplace interference: crowding in the notified zone",
+       subtitle = "Too many notified drivers chase the same rides -> each gets fewer.",
        x = "", y = "Average rides per driver per day") +
   theme(legend.position = "top")
 ```
@@ -319,18 +346,18 @@ ggplot(market, aes(side, rides_per_driver, fill = period)) +
 
 # Application: Co-Author Network Spillovers
 
-Consider an experiment on academic researchers. 80 studies are randomized into treatment arms (T0-T3). Each study has 1-3 authors drawn from a shared pool.
+Consider an experiment on academic researchers aimed at **increasing the reporting of results from pre-registered studies**. 300 studies are randomized into treatment arms T0–T3 (T0 = control; T1–T3 are progressively stronger nudges). Each study has 1–3 authors drawn from a shared pool of 1,000.
 
 ```{r coauthor-network, echo=FALSE, fig.height=3.5}
 # Simulate co-author network
-n_studies <- 80
-n_auth_pool <- 60
+n_studies <- 300
+n_auth_pool <- 1000
 
 set.seed(42)
 study_data <- tibble(
   study_id = 1:n_studies,
   n_auth = sample(1:3, n_studies, replace = TRUE, prob = c(0.3, 0.4, 0.3)),
-  arm = sample(rep(0:3, each = 20))
+  arm = sample(rep(0:3, each = 75))
 )
 
 # Create author assignments
@@ -347,32 +374,33 @@ coauth_pairs <- author_links |>
   filter(study_id_a < study_id_b) |>
   distinct(study_id_a, study_id_b, .keep_all = TRUE)
 
-# Compute spillover exposure
+# Compute spillover exposure: count co-author links to ANY treated study
+# (T1/T2/T3, including same-arm). T0 links don't carry treatment.
 spillover_df <- author_links |>
   inner_join(author_links, by = "author_id", suffix = c("_focal", "_other"),
              relationship = "many-to-many") |>
   filter(study_id_focal != study_id_other) |>
   group_by(study_id_focal) |>
   summarise(
-    n_treated_neighbors = sum(arm_other > 0),
-    n_total_neighbors = n()
+    treatment_exposures = sum(arm_other > 0),
+    total_links = n()
   )
 
 study_data <- study_data |>
   left_join(spillover_df, by = c("study_id" = "study_id_focal")) |>
-  mutate(across(c(n_treated_neighbors, n_total_neighbors),
+  mutate(across(c(treatment_exposures, total_links),
                 ~ replace_na(.x, 0)))
 
 # Show distribution of spillover exposure
 study_data |>
   mutate(arm_label = paste0("T", arm)) |>
-  ggplot(aes(n_treated_neighbors, fill = arm_label)) +
+  ggplot(aes(treatment_exposures, fill = arm_label)) +
   geom_histogram(binwidth = 1, alpha = 0.7) +
   facet_wrap(~ arm_label, nrow = 1) +
   scale_fill_manual(values = c("grey60", "#66c2a5", "#fc8d62", "#8da0cb")) +
   labs(title = "Co-author spillover exposure by treatment arm",
-       subtitle = "Each bar: number of studies with X treated neighbors through shared co-authors",
-       x = "Number of treated co-author links", y = "Count") +
+       subtitle = "X = treatment instances the study's authors encounter via co-authoring other treated studies",
+       x = "Treatment exposures via co-authorship (excluding exposure of own study)", y = "Count of studies") +
   theme(legend.position = "none")
 ```
 
@@ -391,9 +419,13 @@ study_data <- study_data |>
       arm == 2 ~ 0.10,
       arm == 3 ~ 0.15
     ),
-    spillover = 0.02 * n_treated_neighbors,
+    # One-off spillover: control authors learn the reporting practice
+    # the FIRST time they co-author with a treated researcher. After that,
+    # additional exposures add nothing. Treated authors are already trained
+    # via direct treatment, so spillover doesn't lift them further.
+    spillover = if_else(arm == 0 & treatment_exposures > 0, 0.10, 0),
     reporting_rate = pmin(1, 0.40 + direct_effect + spillover +
-                           rnorm(n(), 0, 0.08))
+                           rnorm(n(), 0, 0.05))
   )
 
 # Naive vs corrected
@@ -403,13 +435,14 @@ true_direct <- mean(c(0.05, 0.10, 0.15))
 
 study_data |>
   mutate(treated = if_else(arm > 0, "Treated (T1-T3)", "Control (T0)")) |>
-  ggplot(aes(n_treated_neighbors, reporting_rate, color = treated)) +
+  ggplot(aes(treatment_exposures, reporting_rate, color = treated)) +
   geom_point(alpha = 0.6, size = 2) +
-  geom_smooth(method = "lm", se = FALSE, linewidth = 1) +
+  geom_smooth(method = "lm", formula = y ~ I(x >= 1),
+              se = FALSE, linewidth = 1) +
   scale_color_manual(values = c("firebrick", "steelblue")) +
-  labs(title = "Control studies with more treated co-authors report MORE",
-       subtitle = "Spillovers contaminate the control group -> naive effect is biased",
-       x = "Number of treated co-author links",
+  labs(title = "Control studies with ANY treated co-author report MORE",
+       subtitle = "One-off spillover: first exposure lifts control reporting; treated unaffected",
+       x = "Treatment exposures via co-authorship (excluding exposure of own study)",
        y = "Reporting rate") +
   theme(legend.position = "top")
 ```
@@ -426,9 +459,9 @@ A crucial distinction for marketplace experiments:
 
 .pull-left[
 **Partial equilibrium** (small experiment)
-- Treat 1% of drivers
-- Market barely moves
-- Estimate $\approx$ direct effect of bonus
+- Notify 1% of drivers
+- Zone barely moves (few drivers chasing the same rides)
+- Estimate $\approx$ direct effect of notification
 - Interference is negligible
 ]
 
@@ -436,8 +469,8 @@ A crucial distinction for marketplace experiments:
 
 .pull-right[
 **General equilibrium** (full rollout)
-- Treat 100% of drivers
-- Market adjusts: more drivers → lower wages per ride → some drivers exit anyway
+- Notify 100% of drivers
+- Zone saturates: everyone goes there → each gets fewer rides → effect shrinks
 - The effect you measured at 1% **does not predict** the rollout outcome
 ]
 
@@ -452,14 +485,18 @@ A crucial distinction for marketplace experiments:
 # Partial vs GE: Simulated
 
 ```{r partial-ge, echo=FALSE, fig.height=3.8}
-sim_ge <- function(frac_treated, interference = 0.3) {
-  skill <- drivers$skill
-  bonus <- sample(c(rep(1, round(n * frac_treated)),
-                    rep(0, n - round(n * frac_treated))))
-  interf <- -interference * frac_treated * (1 - bonus)
-  y <- rbinom(n, 1, prob = plogis(-0.5 + 0.3 * skill + 0.5 * bonus + interf))
-  if (sum(bonus == 0) == 0 | sum(bonus == 1) == 0) return(NA_real_)
-  mean(y[bonus == 1]) - mean(y[bonus == 0])
+sim_ge <- function(frac_treated, interference = 0.15) {
+  experience <- drivers$experience
+  notification <- sample(c(rep(1, round(n * frac_treated)),
+                           rep(0, n - round(n * frac_treated))))
+
+  y0 <- pmin(1, pmax(0, 0.4 + 0.2 * experience))
+  y1 <- pmin(1, pmax(0, 0.4 + 0.2 * experience + 0.05 -
+                          interference * frac_treated))
+
+  y_obs <- rbinom(n, 1, prob = if_else(notification == 1, y1, y0))
+  if (sum(notification == 0) == 0 | sum(notification == 1) == 0) return(NA_real_)
+  mean(y_obs[notification == 1]) - mean(y_obs[notification == 0])
 }
 
 fracs <- c(0.01, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90)
@@ -472,13 +509,13 @@ ggplot(ge_data, aes(frac, ate)) +
   geom_line(linewidth = 1.2, color = "steelblue") +
   geom_point(size = 3) +
   geom_hline(yintercept = true_ate, linetype = "dashed", color = "firebrick") +
-  annotate("text", x = 0.5, y = true_ate - 0.008,
+  annotate("text", x = 0.5, y = true_ate + 0.004,
            label = "True direct effect (no interference)",
            color = "firebrick", size = 3.5) +
   annotate("segment", x = 0.05, xend = 0.05, y = ge_data$ate[2],
-           yend = ge_data$ate[2] + 0.03,
+           yend = ge_data$ate[2] - 0.01,
            arrow = arrow(length = unit(0.15, "cm")), color = "grey40") +
-  annotate("text", x = 0.08, y = ge_data$ate[2] + 0.035,
+  annotate("text", x = 0.08, y = ge_data$ate[2] - 0.013,
            label = "Your experiment\n(5% treated)", size = 3, color = "grey40") +
   labs(title = "The experiment predicts the wrong rollout effect",
        subtitle = "At 5% treated, interference is small. At 90%, it dominates.",
@@ -493,8 +530,8 @@ How do you know if interference is a problem in your experiment?
 
 --
 
-**1. Domain knowledge:** Ask "does my treatment change the environment for control units?"
-- Marketplace: does treating suppliers change demand/supply for control suppliers?
+**1. Domain knowledge:** Ask "does my treatment change the environment for other units?"
+- Marketplace: does treating drivers change the supply/demand they face?
 - Network: do treated and control users interact?
 
 --
@@ -510,8 +547,8 @@ How do you know if interference is a problem in your experiment?
 
 --
 
-**4. Look at control group outcomes over time:**
-- If control outcomes *worsen* after the experiment starts, the control group is being contaminated.
+**4. Look at treated-group outcomes over time:**
+- If treated outcomes *worsen* as more units get treated (saturation), crowding is contaminating the treated group.
 
 ---
 
@@ -521,16 +558,18 @@ How do you know if interference is a problem in your experiment?
 # Simulate varying treatment fractions in separate "markets"
 set.seed(42)
 saturation_test <- function(frac, n_per_market = 200) {
-  skill <- rnorm(n_per_market)
-  bonus <- sample(c(rep(1, round(n_per_market * frac)),
-                    rep(0, n_per_market - round(n_per_market * frac))))
-  interf <- -0.3 * frac * (1 - bonus)
-  y <- rbinom(n_per_market, 1,
-              prob = plogis(-0.5 + 0.3 * skill + 0.5 * bonus + interf))
+  experience <- rnorm(n_per_market)
+  notification <- sample(c(rep(1, round(n_per_market * frac)),
+                           rep(0, n_per_market - round(n_per_market * frac))))
+
+  y0 <- pmin(1, pmax(0, 0.4 + 0.2 * experience))
+  y1 <- pmin(1, pmax(0, 0.4 + 0.2 * experience + 0.05 - 0.15 * frac))
+
+  y_obs <- rbinom(n_per_market, 1, prob = if_else(notification == 1, y1, y0))
   tibble(
     frac_treated = frac,
-    mean_control = if (sum(bonus == 0) > 0) mean(y[bonus == 0]) else NA,
-    mean_treated = mean(y[bonus == 1])
+    mean_control = if (sum(notification == 0) > 0) mean(y_obs[notification == 0]) else NA,
+    mean_treated = mean(y_obs[notification == 1])
   )
 }
 
@@ -540,19 +579,19 @@ sat_data |>
   group_by(frac_treated) |>
   summarise(control = mean(mean_control, na.rm = TRUE),
             treated = mean(mean_treated, na.rm = TRUE)) |>
-  pivot_longer(c(control, treated), names_to = "group", values_to = "retention") |>
-  ggplot(aes(factor(frac_treated), retention, fill = group)) +
+  pivot_longer(c(control, treated), names_to = "group", values_to = "accept_rate") |>
+  ggplot(aes(factor(frac_treated), accept_rate, fill = group)) +
   geom_col(position = "dodge", width = 0.6) +
   scale_fill_manual(values = c("firebrick", "steelblue"),
                     labels = c("Control", "Treated")) +
-  labs(title = "Saturation test: control outcomes worsen with more treatment",
-       subtitle = "Treated outcomes are stable; control outcomes drop as interference increases",
-       x = "Fraction treated in market", y = "Mean retention", fill = "") +
+  labs(title = "Saturation test: treated outcomes drop as more are treated",
+       subtitle = "Control outcomes are stable; treated outcomes shrink as crowding grows",
+       x = "Fraction treated in market", y = "Mean accept rate", fill = "") +
   theme(legend.position = "top")
 ```
 
 .highlight-box[
-If control outcomes vary with treatment saturation, SUTVA is violated. The treated-control gap grows even though the *direct* effect is constant.
+If treated outcomes vary with treatment saturation, SUTVA is violated. The treated-control gap shrinks even though the *direct* effect is constant.
 ]
 
 ---
@@ -561,15 +600,15 @@ If control outcomes vary with treatment saturation, SUTVA is violated. The treat
 
 | Type | Mechanism | Bias direction | Example |
 |------|-----------|---------------|---------|
-| **Marketplace** | Supply/demand reallocation | Overestimates ATE | Driver bonus steals rides from control |
-| **Network** | Information/behavior spreads | Underestimates ATE | Co-author learns about reporting |
-| **Shared resource** | Capacity competition | Overestimates ATE | Server allocation experiment |
-| **General equilibrium** | Prices/wages adjust | Direction depends | Full rollout changes market structure |
+| **Marketplace** | Supply/demand reallocation | Depends on which side gets crowded (treated → underestimate; control → overestimate) | Zone notification crowds treated drivers |
+| **Network** | Information/behavior spreads | Underestimates ATE (control group "learns" from treated peers) | Co-author learns about reporting |
+| **Shared resource** | Capacity competition | Depends on which group loses capacity | Server allocation experiment |
+| **General equilibrium** | Prices/wages adjust | Depends on the sign of the equilibrium response (price/wage shift) | Full rollout changes market structure |
 
 --
 
 .highlight-box[
-**The key question for any experiment:** "If I treat more units, does the control group outcome change?" If yes, SUTVA is violated.
+**The key question for any experiment:** "If I treat more units, does anyone else's outcome change?" If yes, SUTVA is violated.
 ]
 
 ---
@@ -580,19 +619,19 @@ Preview of Module 3:
 
 --
 
-1. **Cluster randomization** -- randomize at a level where interference is contained (cities, markets, time periods)
+1. **Cluster randomization** — randomize at a level where interference is contained (cities, markets, time periods)
 
 --
 
-2. **Switchback designs** -- alternate treatment on/off over time within the same unit
+2. **Switchback designs** — alternate treatment on/off over time within the same unit
 
 --
 
-3. **Two-sided marketplace designs** -- randomize on one side, measure effects on the other
+3. **Two-sided marketplace designs** — randomize on one side, measure effects on the other
 
 --
 
-4. **Ego-cluster randomization** -- for network experiments, randomize the cluster around each unit
+4. **Ego-cluster randomization** — for network experiments, randomize the cluster around each unit
 
 --
 
@@ -604,15 +643,15 @@ Each approach trades **bias** for **variance**. Bigger clusters reduce interfere
 
 1. **SUTVA** = no interference + no hidden versions of treatment. It's an assumption, not a fact.
 
-2. In **marketplaces**, treating one side (drivers) almost always affects the other side (riders) and within-side competitors (other drivers). Naive ATE is biased.
+2. In **marketplaces**, treating one side (drivers) almost always changes the supply/demand balance. Naive ATE is biased.
 
 3. In **networks**, treatment spills over through connections. Co-authors, friends, neighbors can all be contaminated.
 
-4. The **direction** of bias depends on whether spillovers help or harm the control group.
+4. The **direction** of bias depends on whether spillovers hurt or help the treated and control groups.
 
 5. **Partial vs general equilibrium**: your small experiment estimates a partial equilibrium effect. The full rollout will be different.
 
-6. **Detection**: vary the treatment fraction, check control outcomes against treatment saturation, use domain knowledge.
+6. **Detection**: vary the treatment fraction, check outcomes against treatment saturation, use domain knowledge.
 
 ---
 
@@ -621,7 +660,7 @@ Each approach trades **bias** for **variance**. Bigger clusters reduce interfere
 In the exercise you will:
 
 1. Simulate a marketplace with and without interference
-2. Show that interference biases the naive ATE upward
+2. Show that interference biases the naive ATE (direction depends on who crowds whom)
 3. Sweep over interference strengths and see the bias grow
 4. Build a co-author network and simulate spillover contamination
 5. Compare partial vs general equilibrium predictions
@@ -634,37 +673,59 @@ class: center, middle, inverse
 # Backup Slides
 
 ---
+name: sim-dgp
+
+# Backup: The DGP Behind Slide 6
+
+One marketplace draw (the Monte Carlo on slide 6 replicates this 1,000× per interference strength):
+
+```{r sim-dgp-show, eval=FALSE}
+sim_marketplace <- function(interference_strength = 0.15,
+                            frac_treated = 0.5) {
+  # 1. Random assignment with the chosen treated share
+  n_t <- round(n * frac_treated)
+  notification <- sample(c(rep(1, n_t), rep(0, n - n_t)))
+
+  # 2. Potential outcomes (probabilities). Crowding shrinks y1 by the
+  #    treated share; control drivers (y0) are unaffected.
+  y0 <- pmin(1, pmax(0, 0.4 + 0.2 * drivers$experience))
+  y1 <- pmin(1, pmax(0, 0.4 + 0.2 * drivers$experience + 0.05 -
+                          interference_strength * frac_treated))
+
+  # 3. Realize observed outcome based on assignment, compute naive ATE
+  y_obs <- rbinom(n, 1, prob = if_else(notification == 1, y1, y0))
+  mean(y_obs[notification == 1]) - mean(y_obs[notification == 0])
+}
+```
+
+Slide 6 plot: `replicate(1000, sim_marketplace(0.15, 0.5))` vs `replicate(1000, sim_marketplace(0.15, 0.7))`.
+
+<a href="#sim-main" class="nav-btn">← back</a>
+
+---
 name: sutva-formal
 
 # Backup: SUTVA Formal Notation
 
-Without SUTVA, each unit $i$'s potential outcome depends on the entire treatment vector:
+Without SUTVA, each unit's outcome depends on the full treatment vector ($2^N$ potential outcomes):
 
 $$Y_i = Y_i(\mathbf{D}) = Y_i(D_1, D_2, \ldots, D_N)$$
 
-With $N$ binary-treatment units, each unit has $2^N$ potential outcomes.
+SUTVA simplifies this to $Y_i(\mathbf{D}) = Y_i(D_i)$ — just 2 potential outcomes per unit.
 
 --
 
-**SUTVA simplifies this:**
+With SUTVA, observed outcome and ATE are well-defined:
 
-$$Y_i(\mathbf{D}) = Y_i(D_i) \quad \forall \mathbf{D}, \mathbf{D}' \text{ such that } D_i = D_i'$$
+$$Y_i^{obs} = D_i \cdot Y_i(1) + (1 - D_i) \cdot Y_i(0), \qquad \tau = E[Y_i(1) - Y_i(0)]$$
 
 --
 
-Under SUTVA, we can write the observed outcome as:
-
-$$Y_i^{obs} = D_i \cdot Y_i(1) + (1 - D_i) \cdot Y_i(0)$$
-
-and the ATE is well-defined as:
-
-$$\tau = E[Y_i(1) - Y_i(0)]$$
-
-Without SUTVA, we need to define which treatment vector we mean. The "average direct effect" becomes:
+Without SUTVA, the "average direct effect" depends on everyone else's assignment $\mathbf{d}_{-i}$:
 
 $$\tau(\mathbf{d}_{-i}) = E[Y_i(1, \mathbf{d}_{-i}) - Y_i(0, \mathbf{d}_{-i})]$$
 
-which depends on $\mathbf{d}_{-i}$, the treatment assignments of all other units.
+<a href="#sutva-main" class="nav-btn">← back</a>
 
 ---
 name: interference-types
@@ -692,7 +753,7 @@ name: interference-types
 ---
 name: ge-formal
 
-# Backup: Partial vs General Equilibrium -- Formal
+# Backup: Partial vs General Equilibrium — Formal
 
 Let $p$ denote a market-clearing price and $\alpha$ the fraction treated.
 
