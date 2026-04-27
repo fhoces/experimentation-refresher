@@ -2,8 +2,13 @@
 # Module 3 Exercise: Designing Around Interference
 # ============================================================================
 #
-# Compare individual vs cluster randomization in a simulated marketplace.
-# Show the bias-variance tradeoff as cluster size varies.
+# Setup: same zone-notification experiment as Modules 1-2, now run across
+# 40 cities of 50 drivers each. Within each city, notified drivers compete
+# with non-notified ones for rides; non-notified drivers' accept rate
+# drops in proportion to the share treated.
+#
+# Compare individual vs cluster randomization, sweep cluster sizes, and
+# explore the bias-variance tradeoff. Then a switchback design with carryover.
 #
 # Instructions: work through each section, run the code, answer the
 # questions in comments. Fill in blanks marked with _____.
@@ -14,85 +19,79 @@ set.seed(42)
 # --- 1. Setup: A Marketplace Across Cities -----------------------------------
 
 n_cities <- 40
-drivers_per_city <- 50
+drivers_per_city <- 5000
 n_total <- n_cities * drivers_per_city
-interference_strength <- 0.3
+interference_strength <- 0.10   # control's accept rate drops by this * frac_treated
 
 # Generate drivers nested in cities
 market <- tibble(
   driver_id = 1:n_total,
   city_id = rep(1:n_cities, each = drivers_per_city),
-  skill = rnorm(n_total),
-  city_effect = rep(rnorm(n_cities, 0, 0.3), each = drivers_per_city)
+  experience = rnorm(n_total),
+  city_effect = rep(rnorm(n_cities, 0, 0.05), each = drivers_per_city)
 )
 
-# True ATE without interference
-true_ate <- mean(plogis(-0.5 + 0.3 * market$skill + market$city_effect + 0.5) -
-                   plogis(-0.5 + 0.3 * market$skill + market$city_effect))
+# True direct effect (LPM coefficient on D from Modules 1-2)
+true_ate <- 0.05
 cat("True ATE (direct effect):", round(true_ate, 3), "\n")
 
 # --- 2. Individual Randomization (with interference) -------------------------
 
-sim_individual <- function(data, interference = 0.3) {
+sim_individual <- function(data, interference = 0.10) {
   data <- data |>
-    mutate(bonus = sample(rep(c(0, 1), each = n() / 2)))
+    mutate(notification = sample(rep(c(0, 1), each = n() / 2)))
 
-  # Within-city interference: control drivers harmed by treated drivers
+  # Within-city interference: control drivers' y0 drops as more are notified
   data <- data |>
     group_by(city_id) |>
     mutate(
-      frac_treated_city = mean(bonus),
-      interf = -interference * frac_treated_city * (1 - bonus)
+      frac_treated_city = mean(notification),
+      y0 = pmin(1, pmax(0, 0.4 + 0.2 * experience + city_effect -
+                              interference * frac_treated_city)),
+      y1 = pmin(1, pmax(0, 0.4 + 0.2 * experience + city_effect + 0.05))
     ) |>
-    ungroup()
+    ungroup() |>
+    mutate(y_obs = rbinom(n(), 1, prob = if_else(notification == 1, y1, y0)))
 
-  data <- data |>
-    mutate(y = rbinom(n(), 1, prob = plogis(-0.5 + 0.3 * skill +
-                                              city_effect + 0.5 * bonus + interf)))
-
-  mean(data$y[data$bonus == 1]) - mean(data$y[data$bonus == 0])
+  mean(data$y_obs[data$notification == 1]) -
+    mean(data$y_obs[data$notification == 0])
 }
 
-individual_ests <- replicate(500, sim_individual(market))
+individual_ests <- replicate(100, sim_individual(market))
 cat("\nIndividual randomization:\n")
 cat("  Mean ATE:", round(mean(individual_ests), 3), "\n")
 cat("  SD:", round(sd(individual_ests), 3), "\n")
 cat("  Bias:", round(mean(individual_ests) - true_ate, 3), "\n")
 
-# Q1: Is the individual-level estimate biased? In which direction?
+# Q1: Is the individual-level estimate biased? In which direction? Why?
+#     (Hint: in a 50/50 city, control's y0 drops by interference * 0.5,
+#      so the gap treated - control opens up beyond the direct effect.)
 
 # --- 3. City-Level Cluster Randomization --------------------------------------
 
-sim_cluster <- function(data, interference = 0.3) {
+sim_cluster <- function(data) {
   # Randomize at the CITY level
   city_arms <- tibble(
     city_id = 1:n_cities,
-    bonus = sample(rep(c(0, 1), each = n_cities / 2))
+    notification = sample(rep(c(0, 1), each = n_cities / 2))
   )
 
   data <- data |>
-    select(-any_of(c("bonus", "frac_treated_city", "interf", "y"))) |>
-    left_join(city_arms, by = "city_id")
-
-  # Within-city interference still happens, but now all drivers in a city
-  # have the SAME treatment -> no within-city interference!
-  data <- data |>
-    group_by(city_id) |>
+    select(driver_id, city_id, experience, city_effect) |>
+    left_join(city_arms, by = "city_id") |>
     mutate(
-      frac_treated_city = mean(bonus),
-      # Between-city interference (much smaller, assume negligible)
-      interf = 0
-    ) |>
-    ungroup()
+      # No within-city mixing: every driver in a city has the same status,
+      # so no rides are stolen across arms within a city.
+      y0 = pmin(1, pmax(0, 0.4 + 0.2 * experience + city_effect)),
+      y1 = pmin(1, pmax(0, 0.4 + 0.2 * experience + city_effect + 0.05)),
+      y_obs = rbinom(n(), 1, prob = if_else(notification == 1, y1, y0))
+    )
 
-  data <- data |>
-    mutate(y = rbinom(n(), 1, prob = plogis(-0.5 + 0.3 * skill +
-                                              city_effect + 0.5 * bonus + interf)))
-
-  mean(data$y[data$bonus == 1]) - mean(data$y[data$bonus == 0])
+  mean(data$y_obs[data$notification == 1]) -
+    mean(data$y_obs[data$notification == 0])
 }
 
-cluster_ests <- replicate(500, sim_cluster(market))
+cluster_ests <- replicate(100, sim_cluster(market))
 cat("\nCluster (city-level) randomization:\n")
 cat("  Mean ATE:", round(mean(cluster_ests), 3), "\n")
 cat("  SD:", round(sd(cluster_ests), 3), "\n")
@@ -109,43 +108,42 @@ cat("  Bias:", round(mean(cluster_ests) - true_ate, 3), "\n")
 # Q3: What happens as we vary cluster size? Bigger clusters = less interference
 #     (good) but fewer independent clusters (bad for variance).
 
-# Simulate different "cluster sizes" by grouping cities into mega-clusters
 sim_varying_clusters <- function(n_clusters) {
-  # Divide 40 cities into n_clusters groups
   cities_per_cluster <- n_cities / n_clusters
   cluster_arms <- tibble(
     cluster_id = 1:n_clusters,
-    bonus = sample(rep(c(0, 1), each = n_clusters / 2))
+    notification = sample(rep(c(0, 1), each = n_clusters / 2))
   )
 
   data <- market |>
     mutate(cluster_id = ceiling(city_id / cities_per_cluster)) |>
     left_join(cluster_arms, by = "cluster_id")
 
-  # Within-cluster interference: cities within the same cluster may
-  # have some interference (adjacent cities share drivers)
+  # Within-cluster mixing diminishes as clusters get larger:
+  # the share of within-cluster mixing scales with (1 / cluster_size).
   data <- data |>
     group_by(cluster_id) |>
     mutate(
-      frac_treated_cluster = mean(bonus),
-      # Residual interference decreases with cluster size
-      interf = -interference_strength *
-        (1 - frac_treated_cluster) * (1 - bonus) * (n_clusters / n_cities)
+      frac_treated_cluster = mean(notification),
+      # residual interference scales with how much within-cluster mixing remains
+      mixing_factor = (n_clusters / n_cities),
+      y0 = pmin(1, pmax(0, 0.4 + 0.2 * experience + city_effect -
+                              interference_strength * frac_treated_cluster *
+                              mixing_factor)),
+      y1 = pmin(1, pmax(0, 0.4 + 0.2 * experience + city_effect + 0.05))
     ) |>
-    ungroup()
+    ungroup() |>
+    mutate(y_obs = rbinom(n(), 1, prob = if_else(notification == 1, y1, y0)))
 
-  data <- data |>
-    mutate(y = rbinom(n(), 1, prob = plogis(-0.5 + 0.3 * skill +
-                                              city_effect + 0.5 * bonus + interf)))
-
-  mean(data$y[data$bonus == 1]) - mean(data$y[data$bonus == 0])
+  mean(data$y_obs[data$notification == 1]) -
+    mean(data$y_obs[data$notification == 0])
 }
 
 # Q4: Fill in the blank with cluster sizes that divide 40 evenly
 cluster_sizes <- c(40, 20, 10, 8, 4, 2)
 
 tradeoff <- map_dfr(cluster_sizes, function(nc) {
-  ests <- replicate(500, sim_varying_clusters(nc))
+  ests <- replicate(100, sim_varying_clusters(nc))
   tibble(
     n_clusters = nc,
     cities_per_cluster = n_cities / nc,
@@ -177,46 +175,38 @@ ggplot(tradeoff, aes(cities_per_cluster)) +
 
 # --- 5. Switchback Design ----------------------------------------------------
 
-# Alternate treatment on/off across 20 time periods in 10 cities.
+# Alternate notification on/off across 20 time periods in 10 cities.
 
 sim_switchback <- function(n_periods = 20, n_sw_cities = 10,
-                           drivers_per = 50, carryover = 0) {
-  # Each (city, period) is a cell. Randomize at the cell level.
+                           carryover = 0) {
   design <- expand_grid(
     city_id = 1:n_sw_cities,
     period = 1:n_periods
   ) |>
     mutate(
-      # Randomize treatment for each cell
-      bonus = sample(c(0, 1), n(), replace = TRUE),
-      city_effect = rep(rnorm(n_sw_cities, 0, 0.3), times = n_periods),
-      period_effect = rep(rnorm(n_periods, 0, 0.1), each = n_sw_cities)
+      notification = sample(c(0, 1), n(), replace = TRUE),
+      city_effect = rep(rnorm(n_sw_cities, 0, 0.05), times = n_periods),
+      period_effect = rep(rnorm(n_periods, 0, 0.02), each = n_sw_cities)
     )
 
-  # Add carryover: previous period's treatment leaks into current period
+  # Add carryover: previous period's notification leaks into current period
   design <- design |>
     group_by(city_id) |>
-    mutate(prev_bonus = lag(bonus, default = 0),
-           carryover_effect = carryover * prev_bonus) |>
-    ungroup()
-
-  # Simulate aggregate outcomes per cell
-  design <- design |>
+    mutate(prev_notif = lag(notification, default = 0),
+           carryover_effect = carryover * prev_notif) |>
+    ungroup() |>
     mutate(
-      base_rate = plogis(-0.5 + city_effect + period_effect),
-      treated_rate = plogis(-0.5 + city_effect + period_effect + 0.5),
-      # Observed rate includes carryover
-      y = if_else(bonus == 1, treated_rate, base_rate) + carryover_effect +
-        rnorm(n(), 0, 0.03)
+      y = pmin(1, pmax(0, 0.4 + city_effect + period_effect +
+                            0.05 * notification + carryover_effect)) +
+            rnorm(n(), 0, 0.02)
     )
 
-  mean(design$y[design$bonus == 1]) - mean(design$y[design$bonus == 0])
+  mean(design$y[design$notification == 1]) -
+    mean(design$y[design$notification == 0])
 }
 
-# No carryover
-sw_no_carry <- replicate(500, sim_switchback(carryover = 0))
-# With carryover
-sw_carry <- replicate(500, sim_switchback(carryover = 0.05))
+sw_no_carry <- replicate(100, sim_switchback(carryover = 0))
+sw_carry    <- replicate(100, sim_switchback(carryover = 0.05))
 
 cat("\nSwitchback design:\n")
 cat("  No carryover - Mean ATE:", round(mean(sw_no_carry), 3),
@@ -233,9 +223,9 @@ cat("  With carryover - Mean ATE:", round(mean(sw_carry), 3),
 
 # Q8: Put it all together. Which design would you choose for:
 #
-# (a) A pricing experiment for a ride-sharing platform (10 cities)?
+# (a) A zone-notification experiment in 10 cities (the M1-M2 setup)?
 # (b) An ad campaign incrementality test (50 DMAs)?
-# (c) A social network feature experiment (viral mechanics)?
+# (c) A network spillover experiment (the M2 author-nudge setup)?
 #
 # Your answer:
 # (a) _____
@@ -265,9 +255,9 @@ scenarios <- bind_rows(
 
 print(scenarios)
 
-# Q10: For a marketplace experiment with 10,000 drivers across 50 cities
+# Q10: For a zone-notification experiment with 10,000 drivers across 50 cities
 #      (200 per city), and ICC = 0.05, what is the effective sample size?
-#      Is that enough to detect a 3 percentage point effect on retention?
+#      Is that enough to detect a 3 percentage point effect?
 #
 # Your answer:
 # _____

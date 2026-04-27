@@ -38,6 +38,43 @@ class: center, middle, inverse, title-slide
   padding: 0.5em 1em;
   margin: 0.5em 0;
 }
+.nav-btn {
+  position: absolute;
+  bottom: 12px;
+  left: 40px;
+  font-size: 11px;
+  background: #e8eaf6;
+  padding: 2px 8px;
+  border-radius: 3px;
+  z-index: 100;
+  text-decoration: none;
+  color: #1a237e;
+}
+.nav-btn:hover { background: #c5cae9; }
+.inline-btn {
+  font-size: 11px;
+  background: #e8eaf6;
+  padding: 2px 8px;
+  border-radius: 3px;
+  text-decoration: none;
+  color: #1a237e;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.inline-btn:hover { background: #c5cae9; }
+.nav-btn-br {
+  position: absolute;
+  bottom: 12px;
+  right: 70px;
+  font-size: 11px;
+  background: #e8eaf6;
+  padding: 2px 8px;
+  border-radius: 3px;
+  z-index: 100;
+  text-decoration: none;
+  color: #1a237e;
+}
+.nav-btn-br:hover { background: #c5cae9; }
 &lt;/style&gt;
 
 
@@ -60,11 +97,10 @@ class: center, middle, inverse, title-slide
 
 # Last Time: SUTVA Breaks Everywhere
 
-Module 2 showed that interference biases the naive ATE:
+Module 2 showed that interference biases the naive ATE in two settings we'll keep using here:
 
-- **Marketplace:** bonus drivers take rides from control drivers (overestimates effect)
-- **Networks:** treated co-authors spill over to control studies (underestimates effect)
-- **General equilibrium:** small experiment `\(\neq\)` full rollout
+- **Marketplace (zone-notification experiment):** notified drivers compete for rides in the same zone, contaminating the comparison
+- **Networks (author-nudge experiment):** control researchers learn the new reporting practice from treated co-authors
 
 --
 
@@ -80,109 +116,119 @@ Every design in this module trades **bias** (from interference) for **variance**
 
 ---
 
-# The Setup: 40 Cities, 50 Drivers Each
+# The Setup: 40 Cities, 5,000 Drivers Each
 
 
 
-A ride-sharing platform operates in **40 cities** with **50 drivers each** (2,000 total). They want to test a driver bonus.
+A ride-sharing platform operates in **40 cities** with **5,000 drivers each** (200,000 total). They want to test the **zone-notification** feature from Module 1.
 
 --
 
-**The problem:** within each city, interference is strong. Bonus drivers take rides from non-bonus drivers.
+**Within-city interference (symmetric):** as more drivers are notified, the high-demand zone gets crowded — *every* driver in the city (notified or not) faces lower accept rates. Direct boost `\(\tau = 0.05\)`, interference `\(\lambda = 0.07\)` → policy effect = `\(-0.02\)` at full rollout.
 
 --
 
 **Design options:**
 
-| Design | Unit of randomization | Independent units |
-|--------|----------------------|-------------------|
-| Individual | Driver | 2,000 (but biased) |
-| City cluster | City | 40 (unbiased within city) |
-| Region cluster | 5-city region | 8 (less bias, more variance) |
+| Design | Unit of randomization | Independent units | Estimand |
+|--------|----------------------|-------------------|----------|
+| Individual | Driver | 200,000 | Direct effect (+0.05) |
+| City cluster | City | 40 | Policy effect (−0.02) |
+| Region cluster | 5-city region | 8 | Policy effect (−0.02) |
 
 ---
+name: indiv-cluster-main
 
 # Individual vs Cluster: Side by Side
 
 &lt;img src="slides_files/figure-html/indiv-vs-cluster-1.png" style="display: block; margin: auto;" /&gt;
 
----
+&lt;a href="#dgp-indiv-cluster" class="nav-btn"&gt;DGP code&lt;/a&gt;
 
-# Why Clustering Eliminates Bias
+---
+name: cluster-bias-main
+
+# Two Estimators, Two Estimands
 
 .pull-left[
-**Individual randomization:**
-- Within each city, ~50% treated, ~50% control
-- Treated drivers take rides from control drivers
-- Control retention **drops** due to interference
-- Naive ATE = direct effect + interference bias
+.small[
+**Individual rand → direct effect:**
+- 50/50 within every city, so frac_t ≈ 0.5 everywhere
+- Both arms face the *same* penalty `\(-\lambda \cdot 0.5\)`; it cancels
+- Naive recovers `\(\tau\)` = +0.05
+- Answers: *"marginal benefit to one driver?"*
 
-**City-level clustering:**
-- Each city is 100% treated or 100% control
-- No within-city interference (everyone has the same status)
-- Between-city interference is small (drivers don't cross cities)
-- ATE is unbiased
+**City-cluster rand → policy effect:**
+- Treated cities: frac_t = 1 (full penalty `\(-\lambda\)`)
+- Control cities: frac_t = 0 (no penalty)
+- Cluster contrast = `\(\tau - \lambda\)` = −0.02
+- Answers: *"what happens at full rollout?"*
+
+Both are unbiased — for *different estimands*. Pick one based on the decision you're trying to make.
+]
 ]
 
 .pull-right[
 
-|Design     |Group   |Within-city interference |Outcome     |
-|:----------|:-------|:------------------------|:-----------|
-|Individual |Control |Yes (harmed)             |Biased down |
-|Individual |Treated |No effect                |Correct     |
-|Cluster    |Control |None                     |Correct     |
-|Cluster    |Treated |None                     |Correct     |
+|Design              |Treated mean |Control mean |Estimator gives        |
+|:-------------------|:------------|:------------|:----------------------|
+|Individual (50/50)  |b + τ − λ·½  |b − λ·½      |τ  (direct, +0.05)     |
+|Cluster (saturated) |b + τ − λ    |b            |τ − λ  (policy, −0.02) |
 
 .highlight-box[
-**Intuition:** clustering works because interference happens *within* clusters. If you randomize the whole cluster, there's no one to interfere with.
+**Intuition:** the cluster contrast *includes* the interference term, so it captures the equilibrium effect under full rollout. Individual rand mechanically cancels the term out.
 ]
 ]
 
----
+.small[**Cost of clustering:** effective sample size collapses from **200,000** drivers (individual) to **40** cities (city cluster) to **8** regions (region cluster). The next slide quantifies this with the design effect.]
 
-# But Clustering Costs You Power
-
-&lt;img src="slides_files/figure-html/power-cost-1.png" style="display: block; margin: auto;" /&gt;
-
-.highlight-box[
-**The bias-variance tradeoff:** individual randomization is biased but precise. Cluster randomization is unbiased but noisy. You need to choose the right level.
-]
+&lt;a href="#cluster-bias-proof" class="nav-btn"&gt;decomposition&lt;/a&gt;
 
 ---
 
 # Design Effect and ICC
 
-The **design effect** quantifies the power loss from clustering:
+The **design effect** is the variance inflation factor from clustering:
 
-`$$n_{eff} = \frac{n}{1 + (m - 1) \cdot \rho}$$`
+`$$DEFF = 1 + (m - 1) \cdot \rho \qquad\Longrightarrow\qquad n_{eff} = \frac{n}{DEFF}$$`
 
-where `\(m\)` = cluster size and `\(\rho\)` = intra-cluster correlation (ICC).
-
---
-
-
-| Cluster size (m)| ICC (rho)| Design effect| Eff. N (of 10,000)| % power lost|
-|----------------:|---------:|-------------:|------------------:|------------:|
-|               10|       0.0|           1.1|               9174|           8%|
-|               10|       0.0|           1.4|               6897|          31%|
-|               10|       0.1|           1.9|               5263|          47%|
-|               10|       0.2|           2.8|               3571|          64%|
-|               50|       0.0|           1.5|               6711|          33%|
-|               50|       0.0|           3.5|               2899|          71%|
-|               50|       0.1|           5.9|               1695|          83%|
-|               50|       0.2|          10.8|                926|          91%|
-|              200|       0.0|           3.0|               3344|          67%|
-|              200|       0.0|          11.0|                913|          91%|
-|              200|       0.1|          20.9|                478|          95%|
-|              200|       0.2|          40.8|                245|          98%|
+For a fixed effect size you want to detect, required `\(n\)` scales by `\(DEFF\)` — equivalently, your effective sample shrinks by the same factor. `\(m\)` is cluster size (drivers per city), `\(\rho\)` is intra-cluster correlation (ICC).
 
 --
 
-.highlight-box[
-Even moderate ICC (0.05) with medium clusters (50) loses ~70% of effective sample size. This is why cluster experiments need many more total observations.
+.pull-left[
+.small[
+
+| m (drivers)|  ICC|    DEFF| Eff. N (of 200k)| Power (MDE = 15 pp)|
+|-----------:|----:|-------:|----------------:|-------------------:|
+|         100| 0.02|     3.0|           67,114|                100%|
+|         100| 0.05|     6.0|           33,613|                100%|
+|         100| 0.10|    10.9|           18,349|                100%|
+|       5,000| 0.02|   101.0|            1,981|                100%|
+|       5,000| 0.05|   251.0|              797|                 99%|
+|       5,000| 0.10|   500.9|              399|                 86%|
+|      25,000| 0.02|   501.0|              399|                 86%|
+|      25,000| 0.05| 1,251.0|              160|                 49%|
+|      25,000| 0.10| 2,500.9|               80|                 28%|
+]
 ]
 
-&lt;a href="#icc-derivation" style="position:absolute; bottom:12px; left:40px; font-size:11px; background:#e8eaf6; padding:2px 8px; border-radius:3px; z-index:100;"&gt;ICC derivation&lt;/a&gt;
+.pull-right[
+.small[
+**Plausible ranges for `\(\rho\)`:**
+
+| Setting | Typical `\(\rho\)` |
+|---------|----------------|
+| Online behavior (clicks, conversions) | 0.001 – 0.01 |
+| Marketplace metrics (accept rate, ride completion) | 0.02 – 0.10 |
+| Geo clusters (DMA, city) | 0.05 – 0.20 |
+| Strong common shocks (weather, surge) | 0.10 – 0.30 |
+
+**Rule of thumb:** anything you'd model with city or time-period fixed effects has `\(\rho\)` big enough to matter. Estimate `\(\rho\)` from a pilot or historical data — don't guess.
+]
+]
+
+&lt;a href="#icc-derivation" class="nav-btn"&gt;ICC derivation&lt;/a&gt;
 
 ---
 
@@ -190,8 +236,8 @@ Even moderate ICC (0.05) with medium clusters (50) loses ~70% of effective sampl
 
 &lt;img src="slides_files/figure-html/tradeoff-sim-1.png" style="display: block; margin: auto;" /&gt;
 
-.highlight-box[
-**RMSE** = `\(\sqrt{\text{bias}^2 + \text{variance}}\)`. The optimal cluster size minimizes RMSE, balancing the two forces.
+.small[
+**Bias** vanishes once clusters reach city scale — interference is fully contained. **Variance** keeps climbing — fewer effective independent units.
 ]
 
 ---
@@ -205,8 +251,8 @@ An alternative to spatial clustering: **randomize over time**.
 .pull-left[
 **How it works:**
 1. Divide time into periods (e.g., 2-hour blocks)
-2. Each period, randomize each city to treatment or control
-3. Compare outcomes in treated vs. control periods
+2. Each period, randomize each city to notification on/off
+3. Compare accept rates in notified vs. non-notified periods
 4. Every city serves as its own control (removes city fixed effects)
 ]
 
@@ -217,13 +263,16 @@ An alternative to spatial clustering: **randomize over time**.
 ]
 
 ---
+name: switchback-strengths
 
 # Switchback: Strengths and Risks
 
+.small[
 **Strengths:**
-- Every unit (city) appears in both arms over time -- removes unit-level confounders
-- More "independent observations" than pure cluster randomization
+- Every unit (city) appears in both arms over time — removes unit-level confounders
+- **More "independent observations" than pure clustering:** identification is *within-city* (a city's "on" periods vs. its own "off" periods), not between cities. The ICC penalty is differenced out, and effective `\(N\)` grows from `\(\approx n_{cities}\)` toward `\(n_{cities} \times n_{periods}\)` &lt;a href="#switchback-effn" class="inline-btn"&gt;proof&lt;/a&gt;
 - Natural for marketplace experiments where interference is spatial, not temporal
+]
 
 --
 
@@ -231,8 +280,8 @@ An alternative to spatial clustering: **randomize over time**.
 
 &lt;img src="slides_files/figure-html/carryover-1.png" style="display: block; margin: auto;" /&gt;
 
-.highlight-box[
-**Carryover** = treatment in period `\(t\)` affects outcomes in period `\(t+1\)`, even if `\(t+1\)` is assigned to control. Fix: add "washout" or "burn-in" periods between switches. Cost: fewer usable periods.
+.small[
+**Carryover:** notification in period `\(t\)` affects behavior in `\(t+1\)` even if `\(t+1\)` is "off" (drivers who learned the zone keep going). **Fix:** insert *washout windows* — short buffers right after each switch that you exclude from analysis, letting behavior reset before measurement resumes. **Cost:** fewer usable minutes per period.
 ]
 
 ---
@@ -240,6 +289,8 @@ An alternative to spatial clustering: **randomize over time**.
 # Switchback: Simulation
 
 &lt;img src="slides_files/figure-html/switchback-sim-1.png" style="display: block; margin: auto;" /&gt;
+
+&lt;a href="#switchback-dgp" class="nav-btn"&gt;DGP code&lt;/a&gt;
 
 ---
 
@@ -251,13 +302,13 @@ In a ride-sharing experiment, you can randomize **riders** instead of **drivers*
 
 .pull-left[
 **Randomize riders:**
-- 50% of riders see new pricing
-- 50% see old pricing
+- 50% of riders see new pricing or matching
+- 50% see the old experience
 - Riders don't interact with each other (mostly)
 - No interference on the randomization side
 
 **Measure driver outcomes:**
-- Driver earnings, wait times, retention
+- Driver earnings, wait times, accept rate
 - These reflect the equilibrium effect
 ]
 
@@ -278,31 +329,39 @@ In a ride-sharing experiment, you can randomize **riders** instead of **drivers*
 
 # Geo Experiments
 
-For online advertising and pricing experiments, **geographic units** are natural clusters:
+.pull-left[
+.small[
+For online advertising and pricing experiments, **geographic units** are natural clusters.
 
---
+A **DMA** (Designated Market Area, defined by Nielsen) is a metro region used for TV and ad targeting — e.g., "New York DMA," "Los Angeles DMA." There are **210 DMAs in the US**, ranging from a few hundred thousand to ~20M people. Ad spend can be served at DMA granularity.
 
+**Treatment** in a geo experiment = changing ad spend in randomly chosen DMAs (typically *pausing* or *boosting* a campaign), holding control DMAs at the status quo. Outcome = revenue / conversions / signups per DMA. The contrast estimates **incremental lift** — what wouldn't have happened organically.
+]
+]
+
+.pull-right[
 &lt;img src="slides_files/figure-html/geo-diagram-1.png" style="display: block; margin: auto;" /&gt;
-
---
+]
 
 .blue-box[
-**Google/Meta approach:** "GeoX" or "geo-based incrementality." Randomize ad spend across 50-200 DMAs. Estimate lift at the DMA level. Power depends on between-DMA variance and number of DMAs, not number of users.
+**Google/Meta approach:** "GeoX" / "geo-based incrementality." Randomize ad spend across 50–200 DMAs. Power depends on between-DMA variance and number of DMAs, not number of users.
 ]
 
 ---
 
 # Ego-Cluster Randomization for Networks
 
-For **network interference** (social media, academic co-authorship), standard clustering is hard because network boundaries are unclear.
+For **network interference** (the author-nudge experiment from Module 2), standard clustering is hard because network boundaries are unclear.
 
 --
 
-**Ego-cluster approach:**
-1. Pick a focal unit (ego)
-2. Define the cluster as ego + all immediate neighbors (alter set)
-3. Randomize the **entire cluster** to the same arm
-4. Interference within the cluster is absorbed
+.small[
+**Ego-cluster approach** (node roles in the chart below):
+1. Pick a focal study — the **ego** (center of each cluster, labeled "ego")
+2. Add every study sharing co-authors with it — the **alters** (the four nodes around each ego)
+3. Randomize the entire ego-cluster (ego + alters) to the same arm
+4. Within-cluster spillover is absorbed; **bridges** (faded grey rings) are alters whose ties extend into the other arm — **drop them from the analysis sample** to avoid cross-arm contamination
+]
 
 --
 
@@ -310,18 +369,17 @@ For **network interference** (social media, academic co-authorship), standard cl
 
 ---
 
-# Application: City-Level Pricing Experiment
+# Application: City-Level Zone-Notification Test
 
-A ride-sharing company wants to test a new **surge pricing algorithm**.
+A ride-sharing company wants to test whether the **zone-notification** feature lifts driver accept rate at the *city* level.
 
 --
 
 .pull-left[
 **Why cluster at the city level?**
-- Surge pricing affects ALL riders and drivers in a city
-- If 50% of riders see new surge and 50% see old, drivers face inconsistent signals
-- City-level randomization: each city gets one algorithm
-- No within-city interference
+- Within a city, notified drivers compete with non-notified for rides
+- A 50/50 split per city contaminates control's accept rate
+- City-level randomization: each city gets the feature on or off, no within-city mixing
 ]
 
 --
@@ -330,9 +388,9 @@ A ride-sharing company wants to test a new **surge pricing algorithm**.
 **The power problem:**
 - Only 40 cities available
 - 20 treatment, 20 control
-- ICC of driver outcomes within cities `\(\approx 0.08\)`
-- Effective `\(N \approx 40\)` (not 2,000)
-- Need a **large** effect to detect anything
+- ICC of accept rate within cities ≈ 0.10
+- DEFF `\(\approx 500 \;\Longrightarrow\;\)` Effective `\(N \approx 400\)` (out of 200k drivers)
+- For MDE = 15 pp, power `\(\approx 86\%\)` — need a **large** effect
 ]
 
 --
@@ -343,28 +401,28 @@ A ride-sharing company wants to test a new **surge pricing algorithm**.
 
 ---
 
-# Application: Switchback for Surge Pricing
+# Application: Switchback for Zone Notifications
 
 **Alternative:** use a switchback design within each city.
 
 --
 
 - Divide each day into 2-hour blocks
-- Randomize which blocks use the new vs. old surge algorithm
-- 12 blocks/day x 30 days x 40 cities = 14,400 city-period cells
+- Randomize which blocks have the zone-notification feature on vs. off
+- 12 blocks/day × 30 days × 40 cities = 14,400 city-period cells
 - Effective N is much larger than 40 clusters
 
 --
 
 **But:**
-- Carryover: if new surge drives drivers away, the next control period starts with fewer drivers
+- **Carryover**: if drivers learn the high-demand zone during "on" periods, they keep going there during "off" periods
 - Need washout periods (waste time and data)
-- Confounding with time-of-day effects (surge matters more at peak times)
+- Confounding with time-of-day effects (notifications matter more at peak times)
 
 --
 
 .blue-box[
-**Practical design:** stratified switchback. Within each city, pair "similar" time blocks (e.g., Monday 5-7pm with Wednesday 5-7pm) and randomize within pairs. This controls for time-of-day and day-of-week effects.
+**Practical design:** stratified switchback. Within each city, pair "similar" time blocks (e.g., Monday 5–7pm with Wednesday 5–7pm) and randomize within pairs. This controls for time-of-day and day-of-week effects.
 ]
 
 ---
@@ -379,7 +437,7 @@ An e-commerce company wants to measure whether their TV ad campaign drives sales
 - 100 DMAs (Designated Market Areas) across the US
 - Randomly assign 50 DMAs to see ads, 50 to no ads
 - Measure sales lift at the DMA level
-- Control for baseline sales (CUPED-style adjustment at the DMA level)
+- Control for baseline sales using **CUPED** — subtract a scaled pre-experiment outcome from each DMA's post outcome to soak up pre-existing variation (covered in M5)
 
 --
 
@@ -434,7 +492,7 @@ An e-commerce company wants to measure whether their TV ad campaign drives sales
 
 4. **Geo experiments**: natural clusters for advertising. Need many geos (50+) and geographically contained treatments.
 
-5. **Ego-cluster randomization**: for network interference. Cluster = focal unit + neighbors.
+5. **Ego-cluster randomization**: for network interference (e.g., the author-nudge experiment). Cluster = focal unit + neighbors.
 
 6. **The bias-variance tradeoff** is the central tension. Minimize **RMSE**, not just bias or variance alone.
 
@@ -446,7 +504,7 @@ An e-commerce company wants to measure whether their TV ad campaign drives sales
 
 In the exercise you will:
 
-1. Compare individual vs. city-level randomization in a marketplace simulation
+1. Compare individual vs. city-level randomization in a zone-notification simulation
 2. Show that clustering eliminates bias but increases variance
 3. Sweep over cluster sizes and find the RMSE-minimizing level
 4. Simulate a switchback design with and without carryover
@@ -455,42 +513,164 @@ In the exercise you will:
 See `exercise.R` for the starter code.
 
 ---
+
+# Course Map
+
+&lt;table&gt;
+&lt;tr&gt;&lt;th&gt;#&lt;/th&gt;&lt;th&gt;Module&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;1&lt;/td&gt;&lt;td&gt;&lt;a href="../module-01/slides.html"&gt;The Experimental Ideal&lt;/a&gt;&lt;/td&gt;&lt;td&gt;✓ done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;2&lt;/td&gt;&lt;td&gt;&lt;a href="../module-02/slides.html"&gt;SUTVA and When It Breaks&lt;/a&gt;&lt;/td&gt;&lt;td&gt;✓ done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;&lt;b&gt;3&lt;/b&gt;&lt;/td&gt;&lt;td&gt;&lt;b&gt;Designing Around Interference&lt;/b&gt; &lt;i&gt;(just finished)&lt;/i&gt;&lt;/td&gt;&lt;td&gt;✓ done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;4&lt;/td&gt;&lt;td&gt;Power and Sample Size&lt;/td&gt;&lt;td&gt;up next&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;5&lt;/td&gt;&lt;td&gt;Analyzing Experiments&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;6&lt;/td&gt;&lt;td&gt;Multiple Testing &amp; Subgroups&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;7&lt;/td&gt;&lt;td&gt;External Validity&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;8&lt;/td&gt;&lt;td&gt;Advanced Topics&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+
+---
 class: center, middle, inverse
 
 # Backup Slides
+
+---
+name: cluster-bias-proof
+
+# Backup: Two Estimators, Two Estimands
+
+**Symmetric interference DGP** — every driver in a city competes against the same treated share `\(s\)`:
+
+`$$y_i^{(0)} = b_i - \lambda \cdot s_{c(i)}, \qquad y_i^{(1)} = b_i + \tau - \lambda \cdot s_{c(i)}$$`
+
+with `\(b_i = 0.4 + 0.2\,\text{exp}_i + \alpha_{c(i)}\)`, `\(\tau = 0.05\)` direct effect, `\(\lambda = 0.07\)` interference.
+
+--
+
+The naive contrast under random assignment — `\(\bar b\)` balances across arms:
+
+`$$\hat{\tau}_{\text{naive}} = E[y^{(1)} \mid D=1] - E[y^{(0)} \mid D=0] = (\bar b + \tau - \lambda \bar s_{D=1}) - (\bar b - \lambda \bar s_{D=0}) = \tau - \lambda(\bar s_{D=1} - \bar s_{D=0})$$`
+
+--
+
+**Individual rand** (50/50 in every city → `\(\bar s_{D=1} = \bar s_{D=0} = 0.5\)`):
+
+`$$\hat\tau_{\text{ind}} = \tau - \lambda(0.5 - 0.5) = \tau = 0.05 \quad \text{(direct effect)}$$`
+
+**City cluster** (treated cities `\(s = 1\)`, control cities `\(s = 0\)`):
+
+`$$\hat\tau_{\text{cluster}} = \tau - \lambda(1 - 0) = \tau - \lambda = -0.02 \quad \text{(policy effect)}$$`
+
+--
+
+Both are unbiased — for *different* estimands. If your decision is "should we roll this out everywhere?", you want `\(\hat\tau_{\text{cluster}}\)`.
+
+&lt;a href="#cluster-bias-main" class="nav-btn"&gt;← back&lt;/a&gt;
+
+---
+name: dgp-indiv-cluster
+
+# Backup: DGP for the Slide 5 Simulation
+
+.small[
+
+```r
+direct_effect &lt;- 0.05   # per-driver direct boost from being notified
+interference  &lt;- 0.07   # symmetric crowd-out per share treated (hits BOTH arms)
+
+# Individual rand: 50/50 in every city → frac_t ≈ 0.5 everywhere
+sim_individual &lt;- function() {
+  d &lt;- market |&gt; mutate(notification = sample(rep(c(0, 1), each = n() / 2)))
+  d |&gt; group_by(city_id) |&gt;
+    mutate(frac_t = mean(notification),                                          # ≈ 0.5
+           y0 = pmin(1, pmax(0, 0.4 + 0.2 * experience + city_effect             # baseline
+                                  - interference * frac_t)),                     # CONTROLS hit by competition
+           y1 = pmin(1, pmax(0, 0.4 + 0.2 * experience + city_effect             # baseline
+                                  + direct_effect - interference * frac_t))) |&gt;  # TREATED also hit
+    ungroup() |&gt;
+    mutate(y_obs = rbinom(n(), 1, prob = if_else(notification == 1, y1, y0))) |&gt;
+    summarise(ate = mean(y_obs[notification == 1]) - mean(y_obs[notification == 0]))
+}
+
+# City-cluster rand: every city is 100% same arm → frac_t is 0 or 1
+sim_cluster &lt;- function() {
+  arms &lt;- tibble(city_id = 1:n_cities,
+                 notification = sample(rep(c(0, 1), each = n_cities / 2)))
+  market |&gt; left_join(arms, by = "city_id") |&gt;
+    group_by(city_id) |&gt; mutate(frac_t = mean(notification)) |&gt; ungroup() |&gt;
+    mutate(y0 = pmin(1, pmax(0, 0.4 + 0.2 * experience + city_effect
+                                  - interference * frac_t)),                     # 0 in control cities
+           y1 = pmin(1, pmax(0, 0.4 + 0.2 * experience + city_effect
+                                  + direct_effect - interference * frac_t)),     # full λ in treated cities
+           y_obs = rbinom(n(), 1, prob = if_else(notification == 1, y1, y0))) |&gt;
+    summarise(ate = mean(y_obs[notification == 1]) - mean(y_obs[notification == 0]))
+}
+```
+]
+
+.small[
+- **Individual:** penalty cancels (both arms get `\(-\lambda \cdot 0.5\)`) → naive = `\(\tau\)` = +0.05 (direct).
+- **Cluster:** treated cities take full `\(-\lambda\)`, control cities take none → ATE = `\(\tau - \lambda\)` = −0.02 (policy).
+]
+
+&lt;a href="#indiv-cluster-main" class="nav-btn"&gt;← back&lt;/a&gt;
 
 ---
 name: icc-derivation
 
 # Backup: ICC and Design Effect Derivation
 
-The **intra-cluster correlation (ICC)** is:
+.small[
+**ICC:** `\(\rho = \dfrac{\sigma^2_b}{\sigma^2_b + \sigma^2_w}\)`, with `\(\sigma^2_b\)` = between-cluster variance, `\(\sigma^2_w\)` = within-cluster variance.
 
-`$$\rho = \frac{\sigma^2_b}{\sigma^2_b + \sigma^2_w}$$`
+For a cluster of size `\(m\)` and `\(K\)` clusters total ($n = Km$):
 
-where `\(\sigma^2_b\)` = between-cluster variance and `\(\sigma^2_w\)` = within-cluster variance.
+`$$\text{Var}(\bar{Y}_c) = \frac{\sigma^2_w}{m} + \sigma^2_b
+\qquad\Longrightarrow\qquad
+\text{Var}(\bar{Y}) = \frac{\sigma^2_w}{Km}\bigl[1 + (m-1)\rho\bigr]$$`
 
---
+Under simple random sampling, `\(\text{Var}_{SRS}(\bar{Y}) = \sigma^2 / n\)`. The ratio is the **design effect**:
 
-For a cluster-level mean with `\(m\)` observations per cluster:
+`$$\text{DEFF} = \frac{\text{Var}(\bar{Y})}{\text{Var}_{SRS}(\bar{Y})} = 1 + (m-1)\rho
+\qquad\Longrightarrow\qquad
+n_{eff} = \frac{n}{\text{DEFF}}$$`
+]
 
-`$$\text{Var}(\bar{Y}_c) = \frac{\sigma^2_w}{m} + \sigma^2_b = \frac{\sigma^2_w}{m} + \frac{\rho}{1-\rho} \sigma^2_w$$`
+---
+name: switchback-dgp
 
---
+# Backup: DGP for the Switchback Simulation
 
-The variance of the overall mean across `\(K\)` clusters:
+.small[
 
-`$$\text{Var}(\bar{Y}) = \frac{1}{K} \left[\frac{\sigma^2_w}{m}(1 + (m-1)\rho)\right]$$`
+```r
+tau_sb &lt;- 0.05   # true within-city treatment effect
 
---
+sim_switchback &lt;- function(carryover = 0) {
+  n_periods &lt;- 50; n_sw_cities &lt;- 20
+  d &lt;- expand_grid(city_id = 1:n_sw_cities, period = 1:n_periods) |&gt;
+    mutate(notification   = sample(c(0, 1), n(), replace = TRUE),       # i.i.d. switching
+           city_effect    = rep(rnorm(n_sw_cities, 0, 0.05),             # μ_c
+                                times = n_periods),
+           period_effect  = rep(rnorm(n_periods,  0, 0.02),              # γ_t
+                                each  = n_sw_cities)) |&gt;
+    group_by(city_id) |&gt;
+    mutate(prev  = lag(notification, default = 0),
+           # Asymmetric carryover: residual treatment leaks into off periods ONLY.
+           # On periods get the full direct effect regardless of prev.
+           carry = carryover * (1 - notification) * prev) |&gt;
+    ungroup() |&gt;
+    mutate(y = 0.4 + city_effect + period_effect +
+               tau_sb * notification + carry + rnorm(n(), 0, 0.02))
+  mean(d$y[d$notification == 1]) - mean(d$y[d$notification == 0])
+}
+```
+]
 
-Compare to simple random sampling (SRS) with `\(n = Km\)` units:
+.small[
+**Why the bias is downward.** With i.i.d. switching, `\(P(\text{prev}=1) = 0.5\)` in both arms — symmetric carryover (a `\(+\delta\)` that hits *any* off period equally) would cancel. But here the carryover is *asymmetric*: it shows up only on `\(T=0\)` periods that follow `\(T=1\)`, lifting the control mean by `\(\delta/2\)` while leaving the treated mean unchanged. So `\(E[\hat{\tau}] = \tau - \delta/2\)`. With `\(\tau = 0.05\)` and `\(\delta = 0.05\)`: estimate ≈ 0.025.
+]
 
-`$$\text{Var}_{SRS}(\bar{Y}) = \frac{\sigma^2}{n}$$`
-
-The ratio `\(\frac{\text{Var}(\bar{Y})}{\text{Var}_{SRS}(\bar{Y})} = 1 + (m-1)\rho\)` is the **design effect (DEFF)**.
-
-The effective sample size is `\(n_{eff} = n / \text{DEFF}\)`.
+&lt;a href="#switchback-formal" class="nav-btn"&gt;formal&lt;/a&gt;
 
 ---
 name: switchback-formal
@@ -505,7 +685,7 @@ For a switchback design with cities `\(c = 1, \ldots, C\)` and periods `\(t = 1,
 
 - `\(\mu_c\)`: city fixed effect
 - `\(\gamma_t\)`: period fixed effect
-- `\(D_{ct}\)`: treatment indicator for city `\(c\)` at time `\(t\)`
+- `\(D_{ct}\)`: notification indicator for city `\(c\)` at time `\(t\)`
 - `\(\delta\)`: carryover parameter (ideally `\(\delta = 0\)`)
 
 --
@@ -521,6 +701,48 @@ If `\(\delta \neq 0\)`, the estimator is biased:
 `$$E[\hat{\tau}] = \tau + \delta \cdot \text{Corr}(D_{ct}, D_{c,t-1})$$`
 
 Under i.i.d. randomization, `\(\text{Corr}(D_{ct}, D_{c,t-1}) \approx 0\)`, so the bias is small but not zero in finite samples. Including `\(D_{c,t-1}\)` as a covariate or using burn-in periods mitigates this.
+
+---
+name: switchback-effn
+
+# Backup: Why `\(n_{eff}\)` Grows from `\(C\)` to `\(C \cdot T\)`
+
+.small[
+Same model: `\(Y_{ct} = \mu_c + \gamma_t + \tau D_{ct} + \varepsilon_{ct}\)`, with `\(\varepsilon_{ct} \sim (0, \sigma_\varepsilon^2)\)` i.i.d., `\(\mu_c \sim (0, \sigma_\mu^2)\)`, `\(\gamma_t \sim (0, \sigma_\gamma^2)\)`. Half-half assignment, `\(C\)` cities, `\(T\)` periods.
+
+**Cluster randomization** (one assignment per city; average `\(T\)` periods within each city):
+
+`$$\bar{Y}_c = \mu_c + \bar{\gamma} + \tau D_c + \bar{\varepsilon}_c
+\quad\Longrightarrow\quad
+\text{Var}(\bar{Y}_c) = \sigma_\mu^2 + \frac{\sigma_\gamma^2 + \sigma_\varepsilon^2}{T}$$`
+
+`$$\text{Var}(\hat{\tau}_{cl}) = \frac{4}{C}\!\left(\sigma_\mu^2 + \frac{\sigma_\gamma^2 + \sigma_\varepsilon^2}{T}\right)
+\;\;\xrightarrow{T \to \infty}\;\;
+\frac{4 \sigma_\mu^2}{C}$$`
+
+The city term `\(\sigma_\mu^2\)` does **not** average down with `\(T\)` — it sets a noise floor governed by the city count `\(C\)`.
+
+**Switchback** (i.i.d. re-randomization each period; FE estimator absorbs `\(\mu_c\)` and `\(\gamma_t\)`):
+
+`$$\hat{\tau}_{sb} = \frac{\sum_{ct} \tilde{D}_{ct}\, Y_{ct}}{\sum_{ct} \tilde{D}_{ct}^2},\qquad
+\tilde{D}_{ct} = D_{ct} - \bar{D}_c - \bar{D}_t + \bar{D}$$`
+
+`$$\text{Var}(\hat{\tau}_{sb}) = \frac{\sigma_\varepsilon^2}{\sum_{ct} \tilde{D}_{ct}^2}
+\approx \frac{\sigma_\varepsilon^2}{0.25 \cdot CT}
+= \frac{4 \sigma_\varepsilon^2}{C \cdot T}$$`
+
+The within-city demeaning kills `\(\mu_c\)`, so noise is driven by the idiosyncratic `\(\sigma_\varepsilon^2\)` over all `\(C \cdot T\)` city-periods.
+
+**Effective `\(n\)`** ( `\(n_{eff} = \sigma^2_{tot} / \text{Var}(\hat{\tau})\)`, scaled to SRS units):
+
+`$$n_{eff,\,cl} \;\approx\; \frac{\sigma^2_{tot}}{\sigma_\mu^2}\cdot\frac{C}{4} \;\sim\; O(C)
+\qquad\text{vs.}\qquad
+n_{eff,\,sb} \;\approx\; \frac{\sigma^2_{tot}}{\sigma_\varepsilon^2}\cdot\frac{CT}{4} \;\sim\; O(C \cdot T)$$`
+
+Switchback gains a factor of `\(T\)` when `\(\sigma_\mu^2\)` is non-trivial (high ICC). With carryover, `\(\sigma_\varepsilon^2\)` is replaced by an inflated effective error and the ratio shrinks toward 1.
+]
+
+&lt;a href="#switchback-strengths" class="nav-btn-br"&gt;← back&lt;/a&gt;
 
 ---
 name: ego-cluster-formal

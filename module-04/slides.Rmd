@@ -47,7 +47,7 @@ set.seed(42)
 <tr><th>#</th><th>Module</th><th>Status</th></tr>
 <tr><td>1</td><td><a href="../module-01/slides.html">The Experimental Ideal</a></td><td>✓ done</td></tr>
 <tr><td>2</td><td><a href="../module-02/slides.html">SUTVA and When It Breaks</a></td><td>✓ done</td></tr>
-<tr><td>3</td><td>Designing Around Interference</td><td>done</td></tr>
+<tr><td>3</td><td><a href="../module-03/slides.html">Designing Around Interference</a></td><td>✓ done</td></tr>
 <tr><td><b>4</b></td><td><b>Power and Sample Size</b> <i>(you are here)</i></td><td>current</td></tr>
 <tr><td>5</td><td>Analyzing Experiments</td><td>upcoming</td></tr>
 <tr><td>6</td><td>Multiple Testing & Subgroups</td><td>upcoming</td></tr>
@@ -363,7 +363,7 @@ tibble(
 
 # Application: Ride-Sharing City-Level Experiment
 
-A ride-sharing company tests a driver bonus in 20 cities (10 treatment, 10 control), ~500 drivers per city. The ICC for driver earnings is 0.08.
+A ride-sharing company tests the **zone-notification** feature (Modules 1–2) in 20 cities (10 treatment, 10 control), ~500 drivers per city. The ICC for driver accept rate within a city is 0.08.
 
 --
 

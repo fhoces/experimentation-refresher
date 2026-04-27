@@ -47,7 +47,7 @@ set.seed(42)
 <tr><th>#</th><th>Module</th><th>Status</th></tr>
 <tr><td>1</td><td><a href="../module-01/slides.html">The Experimental Ideal</a></td><td>✓ done</td></tr>
 <tr><td>2</td><td><a href="../module-02/slides.html">SUTVA and When It Breaks</a></td><td>✓ done</td></tr>
-<tr><td>3</td><td>Designing Around Interference</td><td>done</td></tr>
+<tr><td>3</td><td><a href="../module-03/slides.html">Designing Around Interference</a></td><td>✓ done</td></tr>
 <tr><td>4</td><td>Power and Sample Size</td><td>done</td></tr>
 <tr><td>5</td><td>Analyzing Experiments</td><td>done</td></tr>
 <tr><td>6</td><td>Multiple Testing & Subgroups</td><td>done</td></tr>
@@ -185,7 +185,7 @@ $\rightarrow$ Synthetic control is the go-to answer when the unit count is too s
 
 # Regression Discontinuity: Local Randomization
 
-A ride-sharing platform offers a bonus to drivers who complete 100+ trips/month. Drivers at 99 vs 101 trips are essentially identical --- but only those above the cutoff get the bonus.
+A ride-sharing platform enables the **zone-notification** feature only for drivers with 100+ completed trips this month. Drivers at 99 vs 101 trips are essentially identical — but only those above the cutoff get notifications.
 
 ```{r rd-sim, echo=FALSE, fig.height=3.8}
 n_rd <- 800
