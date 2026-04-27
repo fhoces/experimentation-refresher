@@ -369,6 +369,42 @@ For **network interference** (the author-nudge experiment from Module 2), standa
 
 ---
 
+# Approach 4: Model the Spillover (Exposure Mapping)
+
+The first three approaches **contain** interference by design. When you can't — diffuse networks, observational settings, small samples — **model the spillover** instead.
+
+.pull-left[
+.small[
+**Idea:** for each unit `\(i\)`, build an exposure measure `\(S_i\)` summarizing how its network neighbors are treated. Include `\(S_i\)` as a covariate; recover the direct effect *and* the spillover jointly.
+
+For study `\(i\)` with author set `\(A_i\)` (M2's author-nudge experiment), `\(S_{ik} = \sum_{a \in A_i} \sum_{s \neq i} M_{as} T_{sk}\)` counts other studies in arm `\(k\)` that share an author with `\(i\)`.
+
+- `\(S_i = \sum_{k \geq 1} S_{ik}\)` — exposure to *any* treatment arm
+- `\(P_i = \sum_{k \geq 0} S_{ik}\)` — total degree (incl. control)
+]
+]
+
+.pull-right[
+&lt;img src="slides_files/figure-html/spillover-diagram-1.png" style="display: block; margin: auto;" /&gt;
+.small[
+Study 2 shares author *b* with study 1 and *e* with study 3 ⇒ `\(S_2 = 1\)`, `\(P_2 = 2\)`. Study 4's only tie is out-of-sample ⇒ `\(S_4 = P_4 = 0\)`.
+]
+]
+
+&lt;a href="#spillover-regression" class="nav-btn"&gt;regression &amp; validity&lt;/a&gt;
+
+---
+
+# Approach 4: Simulation
+
+True parameters: `\(\tau_1=0.05\)`, `\(\tau_2=0.10\)`, `\(\tau_3=0.15\)` (direct), `\(\beta_0=0.05\)` (control spillover), `\(\theta=0.02\)` (extra on treated), `\(\psi=0.05\)` (direct effect of degree `\(P_i\)`). 500 studies, co-author network (mean degree ≈ 6), random T0/T1/T2/T3 assignment.
+
+&lt;img src="slides_files/figure-html/spillover-sim-1.png" style="display: block; margin: auto;" /&gt;
+
+&lt;a href="#spillover-regression" class="nav-btn"&gt;regression &amp; validity&lt;/a&gt;
+
+---
+
 # Application: City-Level Zone-Notification Test
 
 A ride-sharing company wants to test whether the **zone-notification** feature lifts driver accept rate at the *city* level.
@@ -622,7 +658,7 @@ name: icc-derivation
 .small[
 **ICC:** `\(\rho = \dfrac{\sigma^2_b}{\sigma^2_b + \sigma^2_w}\)`, with `\(\sigma^2_b\)` = between-cluster variance, `\(\sigma^2_w\)` = within-cluster variance.
 
-For a cluster of size `\(m\)` and `\(K\)` clusters total ($n = Km$):
+For a cluster of size `\(m\)` and `\(K\)` clusters total ( `\(n = Km\)` ):
 
 `$$\text{Var}(\bar{Y}_c) = \frac{\sigma^2_w}{m} + \sigma^2_b
 \qquad\Longrightarrow\qquad
@@ -743,6 +779,143 @@ Switchback gains a factor of `\(T\)` when `\(\sigma_\mu^2\)` is non-trivial (hig
 ]
 
 &lt;a href="#switchback-strengths" class="nav-btn-br"&gt;← back&lt;/a&gt;
+
+---
+name: spillover-regression
+
+# Backup: The Spillover Regression
+
+Augment the DiD specification with exposure terms:
+
+.small[
+`$$Y_{it} = \mu_i + \delta\, I_{t=1} + \sum_{j=1}^{J}\tau_j\,(T_{ij}\, I_{t=1}) + \beta_0\,(S_i\, I_{t=1}) + \theta\,(S_i\, I_{t=1}\, \mathbb{1}\{T_i \neq 0\}) + \sum_{j=0}^{J}\psi_j\,(T_{ij}\, I_{t=1}\, P_i) + \varepsilon_{it}$$`
+]
+
+.pull-left[
+.small[
+**What each term identifies:**
+- `\(\tau_j\)` — direct effect of own assignment to arm `\(j\)`
+- `\(\beta_0\)` — spillover onto **control** studies from exposure to any treatment
+- `\(\theta = \beta_* - \beta_0\)` — *additional* spillover when own arm is treated; sign tells you **complementarity** ( `\(\theta&gt;0\)` ) vs. **substitution** ( `\(\theta&lt;0\)` )
+- `\(\psi_j P_i\)` — controls for total network degree, so spillover ≠ "well-connected studies are different" &lt;a href="#spillover-S-vs-P" class="inline-btn"&gt;S vs P&lt;/a&gt;
+]
+]
+
+.pull-right[
+.small[
+**Restrictions used to cut 16 `\(\beta_{jk}\)` down to 2** (count: 16 → 12 → 4 → 2):
+1. No spillover from control exposure: `\(\beta_{j0}=0\)` for all `\(j\)` ⇒ kills 4 ⇒ **12 left**
+2. Spillover doesn't depend on *which* T-arm exposed (for **all** `\(j\)`): `\(\beta_{jk}=\beta_{j*}\)` for `\(k\in\{1,2,3\}\)` ⇒ collapses 3 entries per row ⇒ **4 left** ($\beta_{0*},\beta_{1*},\beta_{2*},\beta_{3*}$)
+3. Spillover on T-arms is the same across T-arms: `\(\beta_{1*}=\beta_{2*}=\beta_{3*}\equiv\beta_*\)` ⇒ **2 left** ($\beta_0\equiv\beta_{0*}$ and `\(\beta_*\)`)
+
+Each restriction is testable: relax it, refit, compare `\(\widehat\beta_0\)` and `\(\widehat\theta\)`.
+]
+]
+
+&lt;a href="#spillover-validity" class="nav-btn"&gt;validity →&lt;/a&gt;
+
+---
+name: spillover-validity
+
+# Backup: Validity of Exposure Mapping
+
+.small[
+**What's identified for free (under random assignment):**
+- `\(T_{ij}\)` is randomized ⇒ `\(\tau_j\)` is identified unconditionally.
+- `\(S_i\)` is determined by *others'* (random) assignments + the **fixed** network structure ⇒ `\(S_i\)` is "as good as random" *conditional on the network*. So `\(\beta_0\)` is identified by within-arm variation in exposure. &lt;a href="#spillover-id" class="inline-btn"&gt;proof&lt;/a&gt;
+]
+
+.small[
+**What you need on top:**
+1. **Independent random assignment** of `\(T_i\)` across units (or known stratified assignment with conditioning).
+2. **Correct exposure mapping.** `\(S_i\)` captures all relevant interference channels. If second-degree (indirect) ties or out-of-sample co-authors matter, `\(\widehat\beta_0\)` absorbs them — possibly with the wrong sign.
+3. **Linearity / additivity.** Spillover scales linearly in `\(S_i\)` and degree enters through `\(P_i\)` alone. Saturation, threshold, or non-monotone effects, or unmodeled `\(P_i \to Y\)` channels, break this.
+4. **Network exogeneity.** The co-author network must not respond to (anticipated) treatment (no endogenous network formation between `\(t=0\)` and `\(t=1\)`).
+5. **Stable composition of `\(P_i\)`.** `\(P_i\)` must be measured the same way for everyone, so that controlling for it actually absorbs the "high-degree studies are different" channel. &lt;a href="#spillover-S-vs-P" class="inline-btn"&gt;S vs P&lt;/a&gt;
+]
+
+.highlight-box[
+**Trade-off vs. ego-cluster.** Exposure mapping uses the *whole* sample (no nodes dropped) and recovers spillover magnitudes — but identification rests on a parametric model of how spillovers propagate. Ego-cluster guarantees clean identification on a smaller sample. The right choice depends on whether you trust the network model or the partition.
+]
+
+&lt;a href="#spillover-regression" class="nav-btn"&gt;← regression&lt;/a&gt;
+
+---
+name: spillover-id
+
+# Backup: Why `\(\beta_0\)` Is Identified
+
+.small[
+**Setup.** Treatment `\(T_i \in \{0, 1, \dots, J\}\)` assigned independently across `\(i\)`. Network `\(\mathbf{M} = (M_{as})\)` is fixed (measured pre-treatment). Define exposure as
+`$$S_{ik} = \sum_{a \in A_i} \sum_{s \neq i} M_{as}\, \mathbb{1}\{T_s = k\}, \qquad S_i = \sum_{k \geq 1} S_{ik}, \qquad P_i = \sum_{k \geq 0} S_{ik}.$$`
+
+Maintained outcome model:
+`$$Y_i = \mu + \tau_{T_i} + \beta_0\, S_i + \theta\, S_i\, \mathbb{1}\{T_i \neq 0\} + \psi\, P_i + \varepsilon_i,\quad E[\varepsilon_i \mid T_i, S_i, P_i, \mathbf{M}] = 0.$$`
+]
+
+--
+
+.small[
+**Lemma (random exposure).** `\(\;S_i \perp T_i \mid \mathbf{M}.\)`
+
+*Proof.* The inner sum runs over `\(s \neq i\)`, so `\(S_i\)` is a function of `\(\{T_s : s \neq i\}\)` and the fixed network `\(\mathbf{M}\)` alone. Independent assignment gives `\(T_i \perp \{T_s : s \neq i\}\)`, and `\(\mathbf{M}\)` is constant. Therefore `\(S_i \perp T_i \mid \mathbf{M}\)`. `\(\quad\square\)`
+
+(Same argument applies to `\(P_i\)`: `\(P_i \perp T_i \mid \mathbf{M}\)`.)
+]
+
+--
+
+.small[
+**Identification of `\(\beta_0\)`.** Restrict to controls ( `\(T_i = 0\)` ):
+`$$E[Y_i \mid T_i = 0, S_i, P_i, \mathbf{M}] \;=\; \mu + \tau_0 + \beta_0\, S_i + \psi\, P_i.$$`
+
+OLS of `\(Y\)` on `\(S_i\)` **and** `\(P_i\)` within the control sub-sample is consistent for `\(\beta_0\)` whenever the partial variance `\(\text{Var}(S_i \mid P_i, T_i = 0) &gt; 0\)` — guaranteed by the lemma plus a non-degenerate network ( &lt;a href="#spillover-S-vs-P" class="inline-btn"&gt;S vs P&lt;/a&gt; shows this partial variance equals `\(\pi_T(1-\pi_T)\, P_i\)`). Within-treated OLS gives `\(\beta_0 + \theta\)`, so `\(\theta\)` is identified. `\(\quad\square\)`
+]
+
+--
+
+.small[
+**What this *doesn't* prove.** (i) **Linearity of `\(S_i\)` and `\(P_i\)`** — nonlinear or threshold spillovers, indirect ties, or interactions break the result; OLS then recovers a best-linear-projection that is generally not the structural `\(\beta_0\)`. (ii) **Network exogeneity** — co-author networks must not respond to (anticipated) treatment. (iii) **Identifying variation may be small** — if `\(\rho(S, P) \approx 1\)` (dense networks, concentrated treatment fractions), `\(\widehat{\beta_0}\)` is consistent but high-variance.
+]
+
+&lt;a href="#spillover-validity" class="nav-btn-br"&gt;← validity&lt;/a&gt;
+
+---
+name: spillover-S-vs-P
+
+# Backup: `\(S_i\)` vs `\(P_i\)` — Why Both, Despite Collinearity?
+
+.small[
+**Decomposition.** `\(P_i = S_{i0} + S_i\)`, where `\(S_{i0}\)` counts neighbors in the control arm. So under uniform 4-arm randomization with treatment fraction `\(\pi_T = 3/4\)`:
+`$$E[S_i \mid P_i] = \pi_T \cdot P_i = 0.75\, P_i$$`
+The expected `\(S_i\)` is a deterministic linear function of `\(P_i\)` — that's the source of the collinearity. The correlation `\(\rho(S, P)\)` is close to 1 in any sample with non-trivial `\(P_i\)`.
+]
+
+--
+
+.pull-left[
+.small[
+**Where identifying variation lives.** Decompose `\(S_i\)` into structural and randomized components:
+`$$S_i \;=\; \underbrace{\pi_T P_i}_{\text{structural (}\propto\text{degree)}} \;+\; \underbrace{(S_i - \pi_T P_i)}_{\text{randomized}}$$`
+Conditional on `\(P_i\)`, the second piece has variance
+`$$\text{Var}(S_i \mid P_i) = \pi_T(1-\pi_T)\, P_i \approx 0.19\, P_i$$`
+driven entirely by *which arm each neighbor landed in*. That's the variation `\(\widehat{\beta_0}\)` uses.
+]
+]
+
+.pull-right[
+.small[
+**Why include `\(P_i\)` anyway?** Drop `\(P_i\)` and `\(\widehat{\beta_0}\)` confounds two channels:
+1. **Per-T-neighbor spillover** — the structural `\(\beta_0\)`.
+2. **Degree effect** — well-connected studies may differ for unrelated reasons (more visibility, broader networks, prior relationships, productivity).
+
+Including `\(P_i\)` partials out the degree channel; the residual in `\(S_i \mid P_i\)` is *exactly* the randomized neighbor-arm draw, which is the only variation `\(\beta_0\)` should be identified from.
+
+**Cost:** collinearity inflates `\(\text{SE}(\widehat{\beta_0})\)`; power scales with `\(\sqrt{n\,\bar P\,\pi_T(1-\pi_T)}\)`. Identification requires both **many studies** *and* **non-trivial degree**.
+]
+]
+
+&lt;a href="#spillover-validity" class="nav-btn-br"&gt;← validity&lt;/a&gt;
 
 ---
 name: ego-cluster-formal
