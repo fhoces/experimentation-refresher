@@ -1,6 +1,6 @@
 ---
 title: "Module 7: External Validity & Generalizability"
-subtitle: "Your Experiment Worked in SF. Will It Work in Lagos?"
+subtitle: "Your Zone-Notification Worked in 8 Cities. Will It Work in the Other 32?"
 output:
   xaringan::moon_reader:
     css: [default, default-fonts]
@@ -41,6 +41,35 @@ theme_set(theme_minimal(base_size = 14))
 set.seed(42)
 ```
 
+```{r m7-setup, include=FALSE}
+# Threads the M1-M3 zone-notification example through M7.
+# Reuses M3's 40-city / accept-rate framework; adds a city-level effect modifier
+# (local_effect = direct_effect + hte_slope * city_effect) so external-validity
+# questions are concrete instead of generic.
+n_cities <- 40
+drivers_per_city <- 200            # smaller than M3 (5,000) for fast sims
+n_total <- n_cities * drivers_per_city
+
+selected_metros <- c("San Francisco", "Los Angeles", "New York City",
+                     "Chicago", "Boston", "Seattle", "Austin", "Miami")
+
+direct_effect <- 0.05              # average direct effect (M3-consistent)
+interference  <- 0.07              # symmetric crowd-out per share treated
+hte_slope     <- 0.40              # effect-modifier slope (NEW in M7)
+
+set.seed(42)
+cities_df <- tibble(
+  city_id     = 1:n_cities,
+  city_effect = rnorm(n_cities, mean = 0, sd = 0.10)
+) |>
+  arrange(desc(city_effect)) |>
+  mutate(rank         = row_number(),
+         city_name    = if_else(rank <= 8, selected_metros[rank],
+                                paste0("City ", city_id)),
+         selected     = rank <= 8,
+         local_effect = direct_effect + hte_slope * city_effect)
+```
+
 # Course Map
 
 <table>
@@ -57,35 +86,32 @@ set.seed(42)
 
 ---
 
-# The Setup: A Pricing Experiment in San Francisco
+# The Setup: Zone-Notification in 8 of 40 Cities
 
-A ride-sharing platform runs a pricing experiment in San Francisco. A 10% price cut increases rides by 15%.
+The platform from Modules 1–3 ran the **zone-notification experiment** in just **8 hand-picked metros** (the ones with the most engineering bandwidth — and the densest markets). Pooled estimate of the direct effect on accept rate: **≈ +0.11** — about double the +0.05 the M3 model implied for an average city.
 
-```{r sf-experiment, echo=FALSE, fig.height=3.5}
-set.seed(42)
-n <- 2000
-sf_data <- tibble(
-  price_cut = sample(c(0, 1), n, replace = TRUE),
-  rides = rpois(n, lambda = 8 + 3 * price_cut)
-)
+```{r zone-experiment, echo=FALSE, fig.height=3.2}
+selected_summary <- cities_df |> filter(selected) |>
+  summarise(ate = mean(local_effect),
+            se  = sd(local_effect) / sqrt(n()))
 
-sf_data |>
-  group_by(price_cut) |>
-  summarise(mean_rides = mean(rides), se = sd(rides) / sqrt(n())) |>
-  mutate(group = if_else(price_cut == 1, "10% price cut", "Control")) |>
-  ggplot(aes(group, mean_rides, fill = group)) +
+tibble(group = c("Control (no zone notif.)", "Zone notification"),
+       p_accept = c(0.40, 0.40 + selected_summary$ate),
+       se = c(0.005, 0.006)) |>
+  ggplot(aes(group, p_accept, fill = group)) +
   geom_col(width = 0.5, show.legend = FALSE) +
-  geom_errorbar(aes(ymin = mean_rides - 1.96 * se,
-                     ymax = mean_rides + 1.96 * se), width = 0.15) +
+  geom_errorbar(aes(ymin = p_accept - 1.96 * se,
+                     ymax = p_accept + 1.96 * se), width = 0.15) +
   scale_fill_manual(values = c("grey60", "steelblue")) +
-  labs(title = "SF experiment: 10% price cut increases rides",
-       subtitle = "Clean RCT, strong internal validity",
-       x = NULL, y = "Mean rides per user per week")
+  labs(title = "Pooled estimate from the 8 selected metros",
+       subtitle = paste0("Selected: SF, LA, NYC, Chicago, Boston, Seattle, Austin, Miami. ",
+                         "ATE ≈ +", round(selected_summary$ate, 3)),
+       x = NULL, y = "Accept rate")
 ```
 
 --
 
-The CEO asks: "Great, let's roll this out to all 50 cities." Should you?
+The CEO asks: "Great, let's roll this out to all 40 cities." Should you?
 
 ---
 
@@ -118,100 +144,102 @@ The CEO asks: "Great, let's roll this out to all 50 cities." Should you?
 
 ---
 
-# Why SF Results Might Not Generalize
+# Why 8-City Results Might Not Generalize
 
 ```{r city-heterogeneity, echo=FALSE, fig.height=4}
-set.seed(42)
-n_cities <- 8
-city_data <- tibble(
-  city = c("San Francisco", "New York", "Lagos", "Mumbai",
-           "Austin", "London", "Sao Paulo", "Nairobi"),
-  supply_demand_ratio = c(1.2, 0.8, 0.4, 0.5, 1.5, 0.9, 0.6, 0.3),
-  # Effect depends on supply/demand: abundant supply -> price cuts work
-  true_effect = 1 + 4 * supply_demand_ratio + rnorm(n_cities, sd = 0.3)
-)
-
-ggplot(city_data, aes(supply_demand_ratio, true_effect, label = city)) +
-  geom_point(size = 3, color = "steelblue") +
-  geom_text(vjust = -0.7, size = 3.5) +
-  geom_smooth(method = "lm", se = FALSE, color = "firebrick",
-              linetype = "dashed") +
-  labs(title = "Treatment effect varies with local market conditions",
-       subtitle = "Price cuts work best where supply is abundant relative to demand",
-       x = "Supply/demand ratio", y = "Effect of 10% price cut (extra rides)")
-```
-
---
-
-SF has high supply/demand ratio (lots of drivers). Lagos and Nairobi have low ratios (not enough drivers). A price cut in a supply-constrained market just generates unfulfilled demand.
-
----
-
-# Site Selection Bias
-
-.blue-box[
-**Site selection bias:** The sites where experiments are run are not random samples of the target population. They are chosen for convenience, feasibility, or because the treatment is expected to work there.
-]
-
---
-
-Common patterns:
-- Tech companies test in the US first (easiest market, most data)
-- Development RCTs often run in places with cooperative governments
-- Drug trials recruit from academic medical centers (not community clinics)
-
---
-
-```{r site-selection, echo=FALSE, fig.height=2.8}
-tibble(
-  site = c("Experiment sites\n(selected)", "All sites\n(target)"),
-  mean_effect = c(3.5, 2.0),
-  se = c(0.3, 0.5)
-) |>
-  ggplot(aes(site, mean_effect)) +
-  geom_col(width = 0.4, fill = c("firebrick", "steelblue"), alpha = 0.7) +
-  geom_errorbar(aes(ymin = mean_effect - 1.96 * se,
-                     ymax = mean_effect + 1.96 * se), width = 0.1) +
-  labs(title = "Site selection bias: experiment sites are not representative",
-       x = NULL, y = "Average treatment effect") +
-  coord_flip()
-```
-
----
-
-# Heterogeneous Treatment Effects: The Key
-
-```{r hte-simulation, echo=FALSE, fig.height=4}
-set.seed(42)
-n_sites <- 50
-sites <- tibble(
-  site_id = 1:n_sites,
-  # Site characteristic that moderates the effect
-  market_maturity = runif(n_sites, 0, 1),
-  # True effect depends on maturity: mature markets respond more
-  true_effect = 2 * market_maturity + rnorm(n_sites, sd = 0.5),
-  # Experiment ran in 5 most mature sites
-  in_experiment = rank(-market_maturity) <= 5
-)
-
-ggplot(sites, aes(market_maturity, true_effect,
-                   color = in_experiment, shape = in_experiment)) +
-  geom_point(size = 3) +
-  scale_color_manual(values = c("grey60", "firebrick"),
-                     labels = c("Not in experiment", "In experiment")) +
-  scale_shape_manual(values = c(16, 17),
-                     labels = c("Not in experiment", "In experiment")) +
-  geom_smooth(data = sites, aes(group = 1), method = "lm",
+ggplot(cities_df, aes(city_effect, local_effect,
+                       color = selected, shape = selected)) +
+  geom_hline(yintercept = direct_effect, linetype = "dotted", color = "grey60") +
+  annotate("text", x = max(cities_df$city_effect), y = direct_effect,
+           label = "population mean = 0.05", vjust = -0.7, hjust = 1,
+           color = "grey50", size = 3) +
+  geom_smooth(data = cities_df, aes(group = 1), method = "lm",
               color = "steelblue", se = TRUE, linetype = "dashed") +
-  labs(title = "If you only experiment in mature markets, you overestimate the effect",
-       x = "Market maturity", y = "True treatment effect",
+  geom_point(size = 3) +
+  geom_text(data = filter(cities_df, selected),
+            aes(label = city_name), vjust = -0.9, size = 2.8,
+            show.legend = FALSE) +
+  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "firebrick"),
+                     labels = c("Not in experiment", "In experiment (8 metros)")) +
+  scale_shape_manual(values = c("FALSE" = 16, "TRUE" = 17),
+                     labels = c("Not in experiment", "In experiment (8 metros)")) +
+  labs(title = "Local treatment effect rises with city density",
+       subtitle = "The 8 selected metros sit at the top of the city_effect distribution",
+       x = "City effect (demand density)",
+       y = "Local direct effect on accept rate",
        color = NULL, shape = NULL) +
   theme(legend.position = "top")
 ```
 
 --
 
-.highlight-box[
+The selected metros are systematically denser than the typical city. Cities with thin demand or sparse driver pools (negative `city_effect`) see much smaller effects — sometimes near zero.
+
+---
+
+# Site Selection Bias
+
+.blue-box[
+.small[
+**Site selection bias:** experiment sites are not random samples of the target population — they're chosen for convenience, feasibility, or where the treatment is expected to work.
+]
+]
+
+.pull-left[
+.small[
+**Common patterns:**
+- Tech companies test in the densest US metros first
+- Development RCTs run in places with cooperative governments
+- Drug trials recruit from academic medical centers, not community clinics
+
+In our setup: the 8 selected metros sit in the top quintile of `city_effect`. Their average local effect overstates the all-cities target.
+]
+]
+
+.pull-right[
+```{r site-selection, echo=FALSE, fig.height=2.4, fig.width=5}
+tibble(
+  site = c("8 selected metros\n(experiment)", "All 40 cities\n(target)"),
+  mean_effect = c(mean(cities_df$local_effect[cities_df$selected]),
+                  mean(cities_df$local_effect)),
+  se = c(sd(cities_df$local_effect[cities_df$selected]) / sqrt(8),
+         sd(cities_df$local_effect) / sqrt(40))
+) |>
+  ggplot(aes(site, mean_effect)) +
+  geom_col(width = 0.5, fill = c("firebrick", "steelblue"), alpha = 0.7) +
+  geom_errorbar(aes(ymin = mean_effect - 1.96 * se,
+                     ymax = mean_effect + 1.96 * se), width = 0.15) +
+  labs(title = "Selected metros are not representative",
+       x = NULL, y = "Mean local direct effect") +
+  coord_flip()
+```
+]
+
+---
+
+# Heterogeneous Treatment Effects: The Key
+
+```{r hte-simulation, echo=FALSE, fig.height=3.3}
+ggplot(cities_df, aes(city_effect, local_effect,
+                       color = selected, shape = selected)) +
+  geom_smooth(data = cities_df, aes(group = 1), method = "lm",
+              color = "steelblue", se = TRUE, linetype = "dashed") +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "firebrick"),
+                     labels = c("Not in experiment", "In experiment (top 8)")) +
+  scale_shape_manual(values = c("FALSE" = 16, "TRUE" = 17),
+                     labels = c("Not in experiment", "In experiment (top 8)")) +
+  labs(title = "If you only experiment in the densest cities, you overestimate the effect",
+       subtitle = "The slope (= hte_slope) is what makes the experiment-sample mean exceed the target mean",
+       x = "city_effect (demand density)",
+       y = "Local direct effect on accept rate",
+       color = NULL, shape = NULL) +
+  theme(legend.position = "top")
+```
+
+--
+
+.small[
 **If treatment effects are homogeneous** (same everywhere), external validity is free. The problem is entirely driven by **heterogeneous treatment effects** that correlate with site characteristics.
 ]
 
@@ -247,47 +275,38 @@ Re-weight the site-specific conditional effects by the target population's covar
 
 # Transportability: Simulation
 
-```{r transport-sim, echo=FALSE, fig.height=3.8}
-set.seed(42)
-n <- 3000
+```{r transport-sim, echo=FALSE, fig.height=3.6}
+# Source = 8 selected metros, Target = remaining 32 cities.
+# Naive extrapolation uses the source mean. Transportability reweights:
+# integrate the source-fitted CATE(city_effect) over the target's
+# city_effect distribution.
+fit_cate <- lm(local_effect ~ city_effect, data = filter(cities_df, selected))
+cates <- tibble(
+  source_mean   = mean(cities_df$local_effect[cities_df$selected]),
+  target_mean   = mean(cities_df$local_effect[!cities_df$selected]),
+  reweighted    = mean(predict(fit_cate, newdata = filter(cities_df, !selected)))
+) |>
+  pivot_longer(everything(), names_to = "estimate", values_to = "ate") |>
+  mutate(label = recode(estimate,
+                         source_mean = "Source ATE\n(8 metros)",
+                         target_mean = "Target ATE\n(32 cities, truth)",
+                         reweighted  = "Reweighted prediction\n(CATE × target distribution)"),
+         label = factor(label, levels = c("Source ATE\n(8 metros)",
+                                          "Reweighted prediction\n(CATE × target distribution)",
+                                          "Target ATE\n(32 cities, truth)")))
 
-# Source population (experiment site): mostly young, urban
-source <- tibble(
-  pop = "Source (experiment)",
-  age = rnorm(n, mean = 30, sd = 5),
-  urban = rbinom(n, 1, prob = 0.8),
-  treated = sample(c(0, 1), n, replace = TRUE),
-  # Effect moderated by age: younger people respond more
-  y = 5 + (3 - 0.05 * age) * treated + 2 * urban + rnorm(n)
-)
-
-# Target population: older, more rural
-target <- tibble(
-  pop = "Target (new market)",
-  age = rnorm(n, mean = 45, sd = 8),
-  urban = rbinom(n, 1, prob = 0.3),
-  treated = sample(c(0, 1), n, replace = TRUE),
-  y = 5 + (3 - 0.05 * age) * treated + 2 * urban + rnorm(n)
-)
-
-both <- bind_rows(source, target)
-
-effects <- both |>
-  group_by(pop) |>
-  summarise(ate = mean(y[treated == 1]) - mean(y[treated == 0]))
-
-ggplot(effects, aes(pop, ate, fill = pop)) +
+ggplot(cates, aes(label, ate, fill = label)) +
   geom_col(width = 0.5, show.legend = FALSE) +
-  scale_fill_manual(values = c("steelblue", "firebrick")) +
-  labs(title = "Same treatment, different populations, different effects",
-       subtitle = "Source pop is young & urban; target is older & rural",
-       x = NULL, y = "Average treatment effect") +
+  scale_fill_manual(values = c("firebrick", "steelblue", "grey50")) +
+  labs(title = "Naive transport overstates the target; reweighting fixes it",
+       subtitle = "Reweight source CATE(city_effect) by the target's density distribution",
+       x = NULL, y = "Mean direct effect") +
   coord_flip()
 ```
 
 --
 
-Naive extrapolation from the source would overestimate the effect in the target by `r round(effects$ate[2] - effects$ate[1], 1)` units.
+Naive transport from the 8-metro source overestimates the 32-city target by ≈ `r round(cates$ate[1] - cates$ate[3], 3)`. Reweighting the source-fitted CATE by the target's `city_effect` distribution recovers the truth.
 
 ---
 
@@ -335,35 +354,39 @@ dose_data |>
 
 # Temporal Validity: Effects That Decay
 
-```{r novelty-effect, echo=FALSE, fig.height=4}
+```{r novelty-effect, echo=FALSE, fig.height=3.2}
 set.seed(42)
 weeks <- 1:24
-# True effect decays exponentially (novelty wears off)
-true_weekly_effect <- 5 * exp(-0.1 * weeks) + 0.5
-# Observed with noise
-observed_effect <- true_weekly_effect + rnorm(24, sd = 0.3)
+# Drivers gradually learn the high-demand zones — the *direct* effect of the
+# notification decays toward a small steady-state premium as the routing info
+# becomes common knowledge.
+peak_effect    <- 0.12
+steady_effect  <- 0.02
+true_weekly_effect <- steady_effect + (peak_effect - steady_effect) * exp(-0.18 * weeks)
+observed_effect <- true_weekly_effect + rnorm(24, sd = 0.008)
 
 tibble(week = weeks, effect = observed_effect, true = true_weekly_effect) |>
   ggplot(aes(week, effect)) +
   geom_point(color = "steelblue", size = 2) +
   geom_line(aes(y = true), color = "firebrick", linewidth = 1,
             linetype = "dashed") +
-  geom_hline(yintercept = 0.5, linetype = "dotted") +
-  annotate("text", x = 20, y = 0.9, label = "Long-run effect",
-           color = "grey40") +
+  geom_hline(yintercept = steady_effect, linetype = "dotted") +
+  annotate("text", x = 20, y = steady_effect + 0.005,
+           label = "Steady-state effect ≈ 0.02",
+           color = "grey40", size = 3.4) +
   annotate("rect", xmin = 1, xmax = 4, ymin = -Inf, ymax = Inf,
            alpha = 0.1, fill = "steelblue") +
-  annotate("text", x = 2.5, y = 1.5, label = "Experiment\nwindow",
+  annotate("text", x = 2.5, y = 0.13, label = "4-week\nexperiment",
            color = "steelblue", size = 3) +
-  labs(title = "Novelty effects: the experiment overstates the long-run impact",
+  labs(title = "Zone-notification: drivers learn, novelty fades",
        subtitle = "A 4-week experiment captures the peak, not the steady state",
-       x = "Week", y = "Treatment effect")
+       x = "Week", y = "Effect on accept rate")
 ```
 
 --
 
-.highlight-box[
-**Novelty effects in tech:** New features get attention because they are new. The 4-week A/B test shows a 4x larger effect than the steady state. Solution: run longer experiments, or model the decay curve.
+.small[
+**Novelty effects in tech:** drivers who didn't know about the high-demand zone now do — but once everyone knows (and the platform's other surfaces start showing the same info), the *marginal* informational value of the notification shrinks. The 4-week experiment's average (≈ 0.07) is roughly **3× the long-run effect** (≈ 0.02). Fix: run longer, or model the decay curve.
 ]
 
 ---
@@ -398,157 +421,56 @@ tibble(week = weeks, effect = observed_effect, true = true_weekly_effect) |>
 
 ---
 
-# Application: Ride-Sharing Across Cities
-
-```{r rideshare-cities, echo=FALSE, fig.height=4}
-set.seed(42)
-n_cities <- 12
-cities <- tibble(
-  city = c("San Francisco", "New York", "Chicago", "Austin",
-           "Lagos", "Nairobi", "Mumbai", "Jakarta",
-           "London", "Berlin", "Tokyo", "Sydney"),
-  region = rep(c("US", "Emerging", "International"), each = 4),
-  supply_ratio = c(1.3, 0.9, 1.1, 1.5,
-                   0.3, 0.25, 0.4, 0.35,
-                   0.95, 1.0, 0.85, 1.1),
-  # True effect of price cut depends on supply
-  true_effect = 1 + 3 * supply_ratio + rnorm(n_cities, sd = 0.3),
-  # Experiment only ran in SF
-  experimental = city == "San Francisco"
-)
-
-ggplot(cities, aes(supply_ratio, true_effect, color = region, label = city)) +
-  geom_point(size = 3) +
-  geom_text(vjust = -0.7, size = 3, show.legend = FALSE) +
-  geom_smooth(aes(group = 1), method = "lm", se = TRUE,
-              color = "grey50", linetype = "dashed") +
-  geom_point(data = cities |> filter(experimental),
-             shape = 1, size = 6, color = "firebrick", stroke = 1.5) +
-  annotate("text", x = 1.35, y = cities$true_effect[1] + 0.3,
-           label = "Experiment here", color = "firebrick", size = 3) +
-  labs(title = "Extrapolating from SF to other cities",
-       subtitle = "Effect depends on supply/demand ratio; emerging markets are very different",
-       x = "Driver supply / rider demand ratio",
-       y = "Effect of 10% price cut (extra rides)", color = "Region") +
-  theme(legend.position = "top")
-```
-
----
-
 # What Would Help Generalizability?
 
-**Strategy 1: Multi-site experiments**
-
-Run the experiment in 5-10 diverse cities, not just SF. Estimate site-specific effects and model the heterogeneity.
-
---
-
-**Strategy 2: Identify effect modifiers**
-
 .small[
+**Strategy 1: Multi-site experiments.** Run in 5–10 cities **stratified by `city_effect`**, not just the densest 8. Estimate site-specific effects and model the heterogeneity.
+
+**Strategy 2: Identify effect modifiers.** Use the 8 estimated ATEs as data points; fit ATE on `city_effect`; plug a *target* city's `city_effect` into the line to predict its ATE — instead of just averaging the 8.
+
 ```{r effect-modifiers}
-# If we had multi-site data, we could model the heterogeneity
-cities_mod <- lm(true_effect ~ supply_ratio, data = cities)
-cat("Effect per unit supply ratio:", round(coef(cities_mod)[2], 2), "\n")
-# Predict for a new city
-new_city <- data.frame(supply_ratio = 0.35)
-cat("Predicted effect for city with supply ratio 0.35:",
-    round(predict(cities_mod, new_city), 2), "\n")
+sample_8 <- filter(cities_df, selected)
+fit <- lm(local_effect ~ city_effect, data = sample_8)
+predict(fit, data.frame(city_effect = -0.05))   # moderator   → ≈ 0.03
+mean(sample_8$local_effect)                      # naive 8-city → ≈ 0.11
 ```
+
+Same 8 cities of data → two different answers. Moderator says a thin-market city's ATE is ≈ 4× smaller than the naive guess.
+
+**Strategy 3: Understand the mechanism.** Zone-notification routes drivers to concentrated demand. **Strongest** where demand is concentrated (high `city_effect`), **weakest** in thin markets — exactly the heterogeneity we see in the data.
 ]
-
---
-
-**Strategy 3: Understand the mechanism**
-
-Why do price cuts increase rides? If it is because supply is elastic (more drivers come online), then it won't work where supply is constrained. Test the mechanism, not just the outcome.
-
----
-
-# Application: Do Research Results Generalize?
-
-```{r research-generalize, echo=FALSE, fig.height=4}
-set.seed(42)
-# Simulate studies from two eras with different research practices
-n_studies <- 100
-
-era_vec <- rep(c("2015-2017", "2022-2024"), each = n_studies/2)
-studies <- tibble(
-  study_id = 1:n_studies,
-  era = era_vec,
-  has_pap = ifelse(era_vec == "2015-2017",
-                   rbinom(n_studies, 1, 0.3),
-                   rbinom(n_studies, 1, 0.7)),
-  sample_size = ifelse(era_vec == "2015-2017",
-                       round(runif(n_studies, 200, 2000)),
-                       round(runif(n_studies, 500, 5000))),
-  # Reporting rate depends on era and PAP status
-  reporting_rate = pmin(1, pmax(0,
-    0.3 + 0.15 * has_pap + 0.1 * (era == "2022-2024") +
-    rnorm(n_studies, sd = 0.15)
-  ))
-)
-
-ggplot(studies, aes(era, reporting_rate, fill = factor(has_pap))) +
-  geom_boxplot(alpha = 0.7) +
-  scale_fill_manual(values = c("grey60", "steelblue"),
-                    labels = c("No PAP", "Has PAP")) +
-  labs(title = "Reporting rates by era and PAP status",
-       subtitle = "Simulated data: later studies report more, especially with PAPs",
-       x = "Study era", y = "Proportion of hypotheses reported",
-       fill = NULL) +
-  theme(legend.position = "top")
-```
-
---
-
-Results from 2015-2017 studies may not generalize to today: different PAP norms, larger samples, different publication incentives. **Temporal external validity** is a concern.
 
 ---
 
 # When Extrapolation Fails: A Simulation
 
 ```{r extrapolation-fail, echo=FALSE, fig.height=4}
+# Same 40-city framework, but the TRUE local effect is non-linear in
+# city_effect (saturates at high density, dips below zero at very low density —
+# e.g., crowding *hurts* in already-thin markets).
 set.seed(42)
-n_sites <- 30
-n_per_site <- 200
+nl_sites <- cities_df |>
+  mutate(true_cate_nl = 0.05 + 0.5 * tanh(4 * city_effect) - 0.02,
+         est = true_cate_nl + rnorm(n(), sd = 0.012))
 
-# Generate sites with different characteristics
-all_sites <- map_dfr(1:n_sites, function(s) {
-  char <- runif(1, 0, 2)  # site characteristic
-  # True CATE depends non-linearly on characteristic
-  true_cate <- 3 * sin(char * pi / 2)
-  tibble(
-    site = s,
-    characteristic = char,
-    true_cate = true_cate,
-    treated = sample(c(0, 1), n_per_site, replace = TRUE),
-    y = 5 + true_cate * treated + rnorm(n_per_site, sd = 2)
-  )
-})
-
-site_effects <- all_sites |>
-  group_by(site, characteristic, true_cate) |>
-  summarise(est = mean(y[treated == 1]) - mean(y[treated == 0]),
-            .groups = "drop") |>
-  mutate(in_sample = characteristic < 1)  # experiment in low-char sites
-
-ggplot(site_effects, aes(characteristic, est, color = in_sample)) +
-  geom_point(size = 3) +
-  geom_line(aes(y = true_cate, group = 1), color = "firebrick",
+ggplot(nl_sites, aes(city_effect, est, color = selected)) +
+  geom_smooth(data = filter(nl_sites, selected), method = "lm",
+              se = TRUE, color = "steelblue", fullrange = TRUE) +
+  geom_line(aes(y = true_cate_nl, group = 1), color = "firebrick",
             linewidth = 1, linetype = "dashed") +
-  geom_smooth(data = site_effects |> filter(in_sample),
-              method = "lm", se = TRUE, color = "steelblue",
-              fullrange = TRUE) +
-  geom_vline(xintercept = 1, linetype = "dotted") +
-  annotate("text", x = 0.5, y = -0.5, label = "Experiment\nsites",
-           color = "steelblue", size = 3.5) +
-  annotate("text", x = 1.5, y = -0.5, label = "Extrapolation\nzone",
-           color = "firebrick", size = 3.5) +
-  scale_color_manual(values = c("firebrick", "steelblue"), guide = "none") +
-  labs(title = "Linear extrapolation fails when the true relationship is non-linear",
-       subtitle = "The linear fit from experiment sites badly predicts effects elsewhere",
-       x = "Site characteristic", y = "Treatment effect")
+  geom_point(size = 3) +
+  geom_vline(xintercept = min(nl_sites$city_effect[nl_sites$selected]),
+             linetype = "dotted") +
+  annotate("text", x = -0.18, y = 0.05,
+           label = "Extrapolation\nzone", color = "firebrick", size = 3.4) +
+  annotate("text", x = 0.20, y = -0.10,
+           label = "Experiment\nsample", color = "steelblue", size = 3.4) +
+  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "steelblue"),
+                     guide = "none") +
+  labs(title = "Linear extrapolation fails when the true CATE is non-linear in city_effect",
+       subtitle = "Red dashed = truth; blue band = linear fit from the 8 experiment metros",
+       x = "city_effect (demand density)",
+       y = "Local treatment effect")
 ```
 
 ---

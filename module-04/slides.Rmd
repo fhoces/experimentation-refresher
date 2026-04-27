@@ -51,7 +51,7 @@ set.seed(42)
 <tr><td><b>4</b></td><td><b>Power and Sample Size</b> <i>(you are here)</i></td><td>current</td></tr>
 <tr><td>5</td><td>Analyzing Experiments</td><td>upcoming</td></tr>
 <tr><td>6</td><td>Multiple Testing & Subgroups</td><td>upcoming</td></tr>
-<tr><td>7</td><td>External Validity</td><td>upcoming</td></tr>
+<tr><td>7</td><td><a href="../module-07/slides.html">External Validity</a></td><td>✓ done</td></tr>
 <tr><td>8</td><td>Advanced Topics</td><td>upcoming</td></tr>
 </table>
 

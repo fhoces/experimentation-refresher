@@ -22,7 +22,7 @@ academic research.
 | 4 | Power and Sample Size | MDE, simulation-based power, clustering effects, ICC | A/B test planning for ad formats |
 | 5 | Analyzing Experiments | Regression adjustment, CUPED, ITT vs LATE, PAPs | Covariate adjustment for driver experiments |
 | 6 | Multiple Testing & Subgroups | Bonferroni, BH, pre-specified subgroups, forking paths | Testing multiple ad creatives |
-| 7 | External Validity | Site selection, transportability, temporal validity | Cross-city generalization |
+| **7** | [External Validity](module-07/) ([slides](https://fhoces.github.io/experimentation-refresher/module-07/slides.html)) | Site selection, transportability, temporal validity | Cross-city generalization |
 | 8 | Advanced Topics | Synthetic control, bandits, sequential testing, DiD | Feature rollout and adaptive experiments |
 
 ## Structure

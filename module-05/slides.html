@@ -48,11 +48,11 @@ class: center, middle, inverse, title-slide
 &lt;tr&gt;&lt;th&gt;#&lt;/th&gt;&lt;th&gt;Module&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;1&lt;/td&gt;&lt;td&gt;&lt;a href="../module-01/slides.html"&gt;The Experimental Ideal&lt;/a&gt;&lt;/td&gt;&lt;td&gt;✓ done&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;2&lt;/td&gt;&lt;td&gt;&lt;a href="../module-02/slides.html"&gt;SUTVA and When It Breaks&lt;/a&gt;&lt;/td&gt;&lt;td&gt;✓ done&lt;/td&gt;&lt;/tr&gt;
-&lt;tr&gt;&lt;td&gt;3&lt;/td&gt;&lt;td&gt;Designing Around Interference&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;3&lt;/td&gt;&lt;td&gt;&lt;a href="../module-03/slides.html"&gt;Designing Around Interference&lt;/a&gt;&lt;/td&gt;&lt;td&gt;✓ done&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;4&lt;/td&gt;&lt;td&gt;Power and Sample Size&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;&lt;b&gt;5&lt;/b&gt;&lt;/td&gt;&lt;td&gt;&lt;b&gt;Analyzing Experiments&lt;/b&gt; &lt;i&gt;(you are here)&lt;/i&gt;&lt;/td&gt;&lt;td&gt;current&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;6&lt;/td&gt;&lt;td&gt;Multiple Testing &amp; Subgroups&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
-&lt;tr&gt;&lt;td&gt;7&lt;/td&gt;&lt;td&gt;External Validity&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;7&lt;/td&gt;&lt;td&gt;&lt;a href="../module-07/slides.html"&gt;External Validity&lt;/a&gt;&lt;/td&gt;&lt;td&gt;✓ done&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;8&lt;/td&gt;&lt;td&gt;Advanced Topics&lt;/td&gt;&lt;td&gt;upcoming&lt;/td&gt;&lt;/tr&gt;
 &lt;/table&gt;
 
@@ -60,17 +60,18 @@ class: center, middle, inverse, title-slide
 
 # Start Simple: Difference in Means
 
-A ride-sharing company tests a $50 driver bonus. 2,000 drivers randomized equally.
+Same zone-notification experiment as Module 1, now with **weekly earnings** as the primary outcome (continuous — easier to demonstrate variance reduction).
 
 
 ```r
 n &lt;- 2000
 drivers &lt;- tibble(
   id = 1:n,
-  pre_trips = rpois(n, lambda = 30),  # pre-treatment trips
-  bonus = rep(c(0, 1), each = n / 2),
-  # True effect: 3 extra trips. Noisy outcome correlated with pre_trips.
-  post_trips = pre_trips + 3 * bonus + rnorm(n, sd = 12)
+  pre_earnings = rlnorm(n, meanlog = 6.2, sdlog = 0.4),  # ~$500/wk baseline
+  notification = rep(c(0, 1), each = n / 2),
+  # True effect: +$50/wk. Noise correlated with pre_earnings.
+  post_earnings = pre_earnings + 50 * notification +
+                  rnorm(n, sd = 80)
 )
 ```
 
@@ -78,17 +79,17 @@ drivers &lt;- tibble(
 
 
 ```r
-mean(drivers$post_trips[drivers$bonus == 1]) -
-  mean(drivers$post_trips[drivers$bonus == 0])
+mean(drivers$post_earnings[drivers$notification == 1]) -
+  mean(drivers$post_earnings[drivers$notification == 0])
 ```
 
 ```
-## [1] 2.312819
+## [1] 51.56707
 ```
 
 --
 
-This is unbiased for the ATE. But the standard error is large because `post_trips` is noisy.
+This is unbiased for the ATE. But the standard error is large because `post_earnings` is noisy.
 
 ---
 
@@ -96,19 +97,19 @@ This is unbiased for the ATE. But the standard error is large because `post_trip
 
 
 ```r
-fit_simple &lt;- lm(post_trips ~ bonus, data = drivers)
+fit_simple &lt;- lm(post_earnings ~ notification, data = drivers)
 summary(fit_simple)$coefficients |&gt; round(3)
 ```
 
 ```
-##             Estimate Std. Error t value Pr(&gt;|t|)
-## (Intercept)   30.019      0.420  71.476        0
-## bonus          2.313      0.594   3.894        0
+##              Estimate Std. Error t value Pr(&gt;|t|)
+## (Intercept)   528.287      7.480  70.624        0
+## notification   51.567     10.579   4.875        0
 ```
 
 --
 
-The coefficient on `bonus` is identical to the difference in means.
+The coefficient on `notification` is identical to the difference in means.
 
 --
 
@@ -120,19 +121,19 @@ The coefficient on `bonus` is identical to the difference in means.
 
 # Adding Covariates: Why and How
 
-Pre-treatment trips (`pre_trips`) predict post-treatment trips. Adding it as a covariate reduces residual variance:
+Pre-treatment earnings (`pre_earnings`) predict post-treatment earnings. Adding it as a covariate reduces residual variance:
 
 
 ```r
-fit_covar &lt;- lm(post_trips ~ bonus + pre_trips, data = drivers)
+fit_covar &lt;- lm(post_earnings ~ notification + pre_earnings, data = drivers)
 summary(fit_covar)$coefficients |&gt; round(3)
 ```
 
 ```
-##             Estimate Std. Error t value Pr(&gt;|t|)
-## (Intercept)    0.479      1.530   0.313    0.754
-## bonus          2.406      0.543   4.435    0.000
-## pre_trips      0.984      0.049  19.951    0.000
+##              Estimate Std. Error t value Pr(&gt;|t|)
+## (Intercept)    -3.265      5.020  -0.650    0.516
+## notification   48.496      3.613  13.421    0.000
+## pre_earnings    1.006      0.008 122.999    0.000
 ```
 
 --
@@ -141,7 +142,7 @@ summary(fit_covar)$coefficients |&gt; round(3)
 **Without covariate:**
 
 ```
-## SE(bonus): 0.594
+## SE(notification): 10.58
 ```
 ]
 
@@ -149,14 +150,14 @@ summary(fit_covar)$coefficients |&gt; round(3)
 **With covariate:**
 
 ```
-## SE(bonus): 0.543
+## SE(notification): 3.61
 ```
 ]
 
 --
 
 .highlight-box[
-The standard error dropped substantially. Same data, same experiment, but a **tighter** estimate -- just by using information we already had.
+The standard error dropped substantially. Same data, same experiment, but a **tighter** estimate — just by using information we already had.
 ]
 
 ---
@@ -180,21 +181,22 @@ This is **always** at least as precise as the simple difference in means, regard
 .small[
 
 ```r
-drivers &lt;- drivers |&gt; mutate(pre_trips_dm = pre_trips - mean(pre_trips))
-fit_lin &lt;- lm(post_trips ~ bonus * pre_trips_dm, data = drivers)
+drivers &lt;- drivers |&gt;
+  mutate(pre_earnings_dm = pre_earnings - mean(pre_earnings))
+fit_lin &lt;- lm(post_earnings ~ notification * pre_earnings_dm, data = drivers)
 summary(fit_lin)$coefficients |&gt; round(3)
 ```
 
 ```
-##                    Estimate Std. Error t value Pr(&gt;|t|)
-## (Intercept)          29.973      0.384  78.114     0.00
-## bonus                 2.406      0.543   4.435     0.00
-## pre_trips_dm          0.975      0.067  14.598     0.00
-## bonus:pre_trips_dm    0.019      0.099   0.190     0.85
+##                              Estimate Std. Error t value Pr(&gt;|t|)
+## (Intercept)                   529.798      2.553 207.498    0.000
+## notification                   48.496      3.611  13.430    0.000
+## pre_earnings_dm                 0.990      0.011  86.293    0.000
+## notification:pre_earnings_dm    0.032      0.016   1.940    0.053
 ```
 ]
 
-The treatment effect estimate is the coefficient on `bonus`.
+The treatment effect estimate is the coefficient on `notification`.
 
 ---
 
@@ -216,32 +218,35 @@ where `\(X_i\)` is the pre-treatment outcome and `\(\theta = \frac{\text{Cov}(Y,
 
 
 ```r
-theta &lt;- cov(drivers$post_trips, drivers$pre_trips) / var(drivers$pre_trips)
+theta &lt;- cov(drivers$post_earnings, drivers$pre_earnings) /
+         var(drivers$pre_earnings)
 drivers &lt;- drivers |&gt;
-  mutate(y_cuped = post_trips - theta * (pre_trips - mean(pre_trips)))
+  mutate(y_cuped = post_earnings -
+                   theta * (pre_earnings - mean(pre_earnings)))
 
 # Compare variance
-cat("Var(post_trips):", round(var(drivers$post_trips), 1), "\n")
+cat("Var(post_earnings):", round(var(drivers$post_earnings), 0), "\n")
 ```
 
 ```
-## Var(post_trips): 177.6
-```
-
-```r
-cat("Var(y_cuped):   ", round(var(drivers$y_cuped), 1), "\n")
-```
-
-```
-## Var(y_cuped):    148.4
+## Var(post_earnings): 56591
 ```
 
 ```r
-cat("Variance reduction:", round(1 - var(drivers$y_cuped)/var(drivers$post_trips), 3))
+cat("Var(y_cuped):      ", round(var(drivers$y_cuped), 0), "\n")
 ```
 
 ```
-## Variance reduction: 0.164
+## Var(y_cuped):       7110
+```
+
+```r
+cat("Variance reduction:",
+    round(1 - var(drivers$y_cuped)/var(drivers$post_earnings), 3))
+```
+
+```
+## Variance reduction: 0.874
 ```
 
 ---
@@ -251,25 +256,25 @@ cat("Variance reduction:", round(1 - var(drivers$y_cuped)/var(drivers$post_trips
 
 ```r
 # CUPED estimate
-cuped_est &lt;- mean(drivers$y_cuped[drivers$bonus == 1]) -
-             mean(drivers$y_cuped[drivers$bonus == 0])
+cuped_est &lt;- mean(drivers$y_cuped[drivers$notification == 1]) -
+             mean(drivers$y_cuped[drivers$notification == 0])
 
 # Regression with covariate
-reg_est &lt;- coef(fit_covar)["bonus"]
+reg_est &lt;- coef(fit_covar)["notification"]
 
-cat("CUPED estimate:     ", round(cuped_est, 3), "\n")
+cat("CUPED estimate:     ", round(cuped_est, 2), "\n")
 ```
 
 ```
-## CUPED estimate:      2.406
+## CUPED estimate:      48.49
 ```
 
 ```r
-cat("Regression estimate:", round(reg_est, 3), "\n")
+cat("Regression estimate:", round(reg_est, 2), "\n")
 ```
 
 ```
-## Regression estimate: 2.406
+## Regression estimate: 48.5
 ```
 
 --
@@ -298,27 +303,28 @@ Both centered on the truth, but CUPED has a much narrower spread.
 
 
 ```r
-# Stratify by pre_trips tercile
+# Stratify by pre_earnings tercile
 drivers_strat &lt;- drivers |&gt;
-  mutate(stratum = ntile(pre_trips, 3),
-         bonus_strat = ave(1:n(), stratum, FUN = function(x)
+  mutate(stratum = ntile(pre_earnings, 3),
+         notif_strat = ave(1:n(), stratum, FUN = function(x)
            sample(rep(c(0, 1), length.out = length(x)))))
 
 # Post-stratification: add stratum fixed effects
-fit_strat &lt;- lm(post_trips ~ bonus + factor(stratum), data = drivers_strat)
+fit_strat &lt;- lm(post_earnings ~ notif_strat + factor(stratum),
+                data = drivers_strat)
 summary(fit_strat)$coefficients[1:2, ] |&gt; round(3)
 ```
 
 ```
 ##             Estimate Std. Error t value Pr(&gt;|t|)
-## (Intercept)   24.378      0.548  44.501        0
-## bonus          2.062      0.551   3.745        0
+## (Intercept)  341.420      6.516  52.394    0.000
+## notif_strat   12.079      6.520   1.853    0.064
 ```
 
 --
 
 .highlight-box[
-**Post-stratification** adjusts for strata after the fact (even if randomization wasn't stratified). It's a free variance reduction -- always include randomization strata as fixed effects.
+**Post-stratification** adjusts for strata after the fact (even if randomization wasn't stratified). It's a free variance reduction — always include randomization strata as fixed effects.
 ]
 
 ---
@@ -346,7 +352,7 @@ cat("OLS SE: ", round(summary(fit_covar)$coefficients[2, 2], 3), "\n")
 ```
 
 ```
-## OLS SE:  0.543
+## OLS SE:  3.613
 ```
 
 ```r
@@ -354,7 +360,7 @@ cat("HC2 SE: ", round(se_hc2[2], 3), "\n")
 ```
 
 ```
-## HC2 SE:  0.542
+## HC2 SE:  3.614
 ```
 ]
 
@@ -365,9 +371,9 @@ For **cluster-randomized** designs, cluster the standard errors at the level of 
 .small[
 
 ```r
-# If randomized at city level:
-# lm(y ~ treatment, data = df) with cluster-robust SEs at city level
-# Or use fixest::feols(y ~ treatment, cluster = ~city, data = df)
+# If randomized at city level (Module 3):
+# lm(y ~ notification, data = df) with cluster-robust SEs at city level
+# Or use fixest::feols(y ~ notification, cluster = ~city, data = df)
 ```
 ]
 
@@ -375,7 +381,7 @@ For **cluster-randomized** designs, cluster the standard errors at the level of 
 
 # ITT vs LATE: Non-Compliance
 
-Not everyone assigned to treatment actually takes the treatment.
+Not every driver assigned to the notification feature actually receives notifications — some have notifications disabled at the OS level, some opt out in-app.
 
 
 ```r
@@ -383,10 +389,12 @@ n &lt;- 2000
 experiment &lt;- tibble(
   id = 1:n,
   assigned = rep(c(0, 1), each = n / 2),
-  # 70% compliance: only 70% of those assigned to bonus actually use it
-  complied = if_else(assigned == 1, rbinom(n, 1, prob = 0.70), 0L),
-  # Effect only for compliers: 5 extra trips
-  post_trips = rpois(n, lambda = 30) + 5 * complied + rnorm(n, sd = 8)
+  # 70% compliance: only 70% of those assigned actually receive notifications
+  receives_notif = if_else(assigned == 1, rbinom(n, 1, prob = 0.70), 0L),
+  # Effect only for compliers: +$60/wk
+  post_earnings = rlnorm(n, meanlog = 6.2, sdlog = 0.4) +
+                  60 * receives_notif +
+                  rnorm(n, sd = 60)
 )
 ```
 
@@ -396,13 +404,13 @@ experiment &lt;- tibble(
 **ITT** (Intent-to-Treat):
 
 ```r
-itt &lt;- mean(experiment$post_trips[experiment$assigned == 1]) -
-       mean(experiment$post_trips[experiment$assigned == 0])
-cat("ITT:", round(itt, 2))
+itt &lt;- mean(experiment$post_earnings[experiment$assigned == 1]) -
+       mean(experiment$post_earnings[experiment$assigned == 0])
+cat("ITT: $", round(itt, 1))
 ```
 
 ```
-## ITT: 3.48
+## ITT: $ 40.6
 ```
 ]
 
@@ -410,13 +418,13 @@ cat("ITT:", round(itt, 2))
 **LATE** (Local Average Treatment Effect):
 
 ```r
-compliance_rate &lt;- mean(experiment$complied[experiment$assigned == 1])
+compliance_rate &lt;- mean(experiment$receives_notif[experiment$assigned == 1])
 late &lt;- itt / compliance_rate
-cat("LATE:", round(late, 2), "\n")
+cat("LATE: $", round(late, 1), "\n")
 ```
 
 ```
-## LATE: 5.07
+## LATE: $ 59.7
 ```
 
 ```r
@@ -424,7 +432,7 @@ cat("Compliance:", round(compliance_rate, 2))
 ```
 
 ```
-## Compliance: 0.69
+## Compliance: 0.68
 ```
 ]
 
@@ -433,29 +441,29 @@ cat("Compliance:", round(compliance_rate, 2))
 # ITT vs LATE: What to Report?
 
 .blue-box[
-**ITT** = effect of *assigning* treatment. Always identified by randomization. This is the policy-relevant effect: "what happens if we offer this to everyone?"
+**ITT** = effect of *assigning* treatment (rolling out the notification feature). Always identified by randomization. This is the policy-relevant effect: "what happens if we ship to everyone?"
 
-**LATE** = effect of *taking* treatment on compliers. Requires additional assumptions (monotonicity, exclusion restriction). This is the "efficacy" effect.
+**LATE** = effect of *actually receiving* notifications, on compliers. Requires additional assumptions (monotonicity, exclusion restriction). This is the "efficacy" effect.
 ]
 
 --
 
 
-|Estimand                  | Estimate|Issue                            |
-|:-------------------------|--------:|:--------------------------------|
-|ITT (OLS on assignment)   |     3.48|Diluted by non-compliance        |
-|LATE (IV / Wald)          |     5.07|Accounts for non-compliance      |
-|Naive (OLS on compliance) |     5.01|BIASED: compliance is endogenous |
+|Estimand                      | Estimate|Issue                         |
+|:-----------------------------|--------:|:-----------------------------|
+|ITT (OLS on assignment)       |     40.6|Diluted by non-compliance     |
+|LATE (IV / Wald)              |     59.7|Accounts for non-compliance   |
+|Naive (OLS on actual receipt) |     59.6|BIASED: receipt is endogenous |
 
 --
 
 .highlight-box[
-**Never** regress on actual treatment take-up -- it's endogenous. Use assignment as an instrument (2SLS) to get LATE, or report ITT.
+**Never** regress on actual treatment take-up — it's endogenous. Use assignment as an instrument (2SLS) to get LATE, or report ITT.
 ]
 
 ---
 
-# Application: Ride-Sharing Driver Bonus with CUPED
+# Application: Zone-Notification with CUPED
 
 &lt;img src="slides_files/figure-html/rideshare-cuped-1.png" style="display: block; margin: auto;" /&gt;
 
@@ -463,7 +471,7 @@ cat("Compliance:", round(compliance_rate, 2))
 
 # Application: DiD for Pre/Post Intervention
 
-Simulated academic reporting experiment: 200 studies, 4 treatment arms (T0-T3), measure hypothesis reporting rates before and after intervention.
+The author-nudge experiment from Module 2: 200 studies, 4 treatment arms (T0–T3), measure hypothesis-reporting rates before and after the intervention.
 
 .small[
 
@@ -535,7 +543,7 @@ A good PAP specifies:
 1. **Primary outcome(s)** and how they're constructed
 2. **Estimating equation** (e.g., the DiD specification above)
 3. **Standard errors** (robust? clustered? at what level?)
-4. **Multiple testing** corrections (if applicable -- Module 6)
+4. **Multiple testing** corrections (if applicable — Module 6)
 5. **Subgroup analyses** (which ones are confirmatory vs. exploratory?)
 6. **Rules for deviations** (what do you do if compliance is lower than expected?)
 
@@ -619,7 +627,7 @@ where `\(X_i\)` is a pre-treatment covariate (e.g., last period's outcome).
 **Step 3:** Minimize over `\(\theta\)`:
 `$$\theta^* = \frac{\text{Cov}(Y, X)}{\text{Var}(X)}$$`
 
-This is the OLS coefficient from regressing `\(Y\)` on `\(X\)` -- CUPED is regression.
+This is the OLS coefficient from regressing `\(Y\)` on `\(X\)` — CUPED is regression.
 
 --
 
@@ -674,7 +682,7 @@ This is equivalent to 2SLS with `\(Z\)` as an instrument for `\(D\)`.
 3. **Exclusion restriction:** `\(Z\)` affects `\(Y\)` only through `\(D\)`
 4. **Monotonicity:** No "defiers" (no one does the opposite of their assignment)
 
-Under these assumptions, LATE identifies the effect on **compliers** -- those who take treatment when assigned to it and don't when assigned to control.
+Under these assumptions, LATE identifies the effect on **compliers** — those who take treatment when assigned to it and don't when assigned to control.
     </textarea>
 <style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
 <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>

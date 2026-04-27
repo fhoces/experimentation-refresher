@@ -51,7 +51,7 @@ set.seed(42)
 <tr><td>4</td><td>Power and Sample Size</td><td>done</td></tr>
 <tr><td>5</td><td>Analyzing Experiments</td><td>done</td></tr>
 <tr><td>6</td><td>Multiple Testing & Subgroups</td><td>done</td></tr>
-<tr><td>7</td><td>External Validity</td><td>done</td></tr>
+<tr><td>7</td><td><a href="../module-07/slides.html">External Validity</a></td><td>✓ done</td></tr>
 <tr><td><b>8</b></td><td><b>Advanced Topics for Tech Interviews</b> <i>(you are here)</i></td><td>current</td></tr>
 </table>
 

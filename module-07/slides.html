@@ -15,7 +15,7 @@ class: center, middle, inverse, title-slide
 # Module 7: External Validity &amp; Generalizability
 ]
 .subtitle[
-## Your Experiment Worked in SF. Will It Work in Lagos?
+## Your Zone-Notification Worked in 8 Cities. Will It Work in the Other 32?
 ]
 
 ---
@@ -42,13 +42,15 @@ class: center, middle, inverse, title-slide
 
 
 
+
+
 # Course Map
 
 &lt;table&gt;
 &lt;tr&gt;&lt;th&gt;#&lt;/th&gt;&lt;th&gt;Module&lt;/th&gt;&lt;th&gt;Status&lt;/th&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;1&lt;/td&gt;&lt;td&gt;&lt;a href="../module-01/slides.html"&gt;The Experimental Ideal&lt;/a&gt;&lt;/td&gt;&lt;td&gt;✓ done&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;2&lt;/td&gt;&lt;td&gt;&lt;a href="../module-02/slides.html"&gt;SUTVA and When It Breaks&lt;/a&gt;&lt;/td&gt;&lt;td&gt;✓ done&lt;/td&gt;&lt;/tr&gt;
-&lt;tr&gt;&lt;td&gt;3&lt;/td&gt;&lt;td&gt;Designing Around Interference&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;3&lt;/td&gt;&lt;td&gt;&lt;a href="../module-03/slides.html"&gt;Designing Around Interference&lt;/a&gt;&lt;/td&gt;&lt;td&gt;✓ done&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;4&lt;/td&gt;&lt;td&gt;Power and Sample Size&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;5&lt;/td&gt;&lt;td&gt;Analyzing Experiments&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
 &lt;tr&gt;&lt;td&gt;6&lt;/td&gt;&lt;td&gt;Multiple Testing &amp; Subgroups&lt;/td&gt;&lt;td&gt;done&lt;/td&gt;&lt;/tr&gt;
@@ -58,15 +60,15 @@ class: center, middle, inverse, title-slide
 
 ---
 
-# The Setup: A Pricing Experiment in San Francisco
+# The Setup: Zone-Notification in 8 of 40 Cities
 
-A ride-sharing platform runs a pricing experiment in San Francisco. A 10% price cut increases rides by 15%.
+The platform from Modules 1–3 ran the **zone-notification experiment** in just **8 hand-picked metros** (the ones with the most engineering bandwidth — and the densest markets). Pooled estimate of the direct effect on accept rate: **≈ +0.11** — about double the +0.05 the M3 model implied for an average city.
 
-&lt;img src="slides_files/figure-html/sf-experiment-1.png" style="display: block; margin: auto;" /&gt;
+&lt;img src="slides_files/figure-html/zone-experiment-1.png" style="display: block; margin: auto;" /&gt;
 
 --
 
-The CEO asks: "Great, let's roll this out to all 50 cities." Should you?
+The CEO asks: "Great, let's roll this out to all 40 cities." Should you?
 
 ---
 
@@ -99,32 +101,38 @@ The CEO asks: "Great, let's roll this out to all 50 cities." Should you?
 
 ---
 
-# Why SF Results Might Not Generalize
+# Why 8-City Results Might Not Generalize
 
 &lt;img src="slides_files/figure-html/city-heterogeneity-1.png" style="display: block; margin: auto;" /&gt;
 
 --
 
-SF has high supply/demand ratio (lots of drivers). Lagos and Nairobi have low ratios (not enough drivers). A price cut in a supply-constrained market just generates unfulfilled demand.
+The selected metros are systematically denser than the typical city. Cities with thin demand or sparse driver pools (negative `city_effect`) see much smaller effects — sometimes near zero.
 
 ---
 
 # Site Selection Bias
 
 .blue-box[
-**Site selection bias:** The sites where experiments are run are not random samples of the target population. They are chosen for convenience, feasibility, or because the treatment is expected to work there.
+.small[
+**Site selection bias:** experiment sites are not random samples of the target population — they're chosen for convenience, feasibility, or where the treatment is expected to work.
+]
 ]
 
---
+.pull-left[
+.small[
+**Common patterns:**
+- Tech companies test in the densest US metros first
+- Development RCTs run in places with cooperative governments
+- Drug trials recruit from academic medical centers, not community clinics
 
-Common patterns:
-- Tech companies test in the US first (easiest market, most data)
-- Development RCTs often run in places with cooperative governments
-- Drug trials recruit from academic medical centers (not community clinics)
+In our setup: the 8 selected metros sit in the top quintile of `city_effect`. Their average local effect overstates the all-cities target.
+]
+]
 
---
-
+.pull-right[
 &lt;img src="slides_files/figure-html/site-selection-1.png" style="display: block; margin: auto;" /&gt;
+]
 
 ---
 
@@ -134,7 +142,7 @@ Common patterns:
 
 --
 
-.highlight-box[
+.small[
 **If treatment effects are homogeneous** (same everywhere), external validity is free. The problem is entirely driven by **heterogeneous treatment effects** that correlate with site characteristics.
 ]
 
@@ -174,7 +182,7 @@ Re-weight the site-specific conditional effects by the target population's covar
 
 --
 
-Naive extrapolation from the source would overestimate the effect in the target by -0.7 units.
+Naive transport from the 8-metro source overestimates the 32-city target by ≈ 0.083. Reweighting the source-fitted CATE by the target's `city_effect` distribution recovers the truth.
 
 ---
 
@@ -186,7 +194,7 @@ Naive extrapolation from the source would overestimate the effect in the target 
 If you understand the **mechanism**, you can predict *where* the treatment will work:
 
 - Price cut works because it shifts demand → only works if supply can absorb it
-- Driver bonus works because it increases effort → works wherever effort is elastic
+- Zone notification works because it routes drivers to demand → works wherever demand is concentrated
 - A nudge works because it reduces friction → works wherever friction is the bottleneck
 ]
 
@@ -208,8 +216,8 @@ If you understand the **mechanism**, you can predict *where* the treatment will 
 
 --
 
-.highlight-box[
-**Novelty effects in tech:** New features get attention because they are new. The 4-week A/B test shows a 4x larger effect than the steady state. Solution: run longer experiments, or model the decay curve.
+.small[
+**Novelty effects in tech:** drivers who didn't know about the high-demand zone now do — but once everyone knows (and the platform's other surfaces start showing the same info), the *marginal* informational value of the notification shrinks. The 4-week experiment's average (≈ 0.07) is roughly **3× the long-run effect** (≈ 0.02). Fix: run longer, or model the decay curve.
 ]
 
 ---
@@ -244,61 +252,37 @@ If you understand the **mechanism**, you can predict *where* the treatment will 
 
 ---
 
-# Application: Ride-Sharing Across Cities
-
-&lt;img src="slides_files/figure-html/rideshare-cities-1.png" style="display: block; margin: auto;" /&gt;
-
----
-
 # What Would Help Generalizability?
 
-**Strategy 1: Multi-site experiments**
-
-Run the experiment in 5-10 diverse cities, not just SF. Estimate site-specific effects and model the heterogeneity.
-
---
-
-**Strategy 2: Identify effect modifiers**
-
 .small[
+**Strategy 1: Multi-site experiments.** Run in 5–10 cities **stratified by `city_effect`**, not just the densest 8. Estimate site-specific effects and model the heterogeneity.
+
+**Strategy 2: Identify effect modifiers.** Use the 8 estimated ATEs as data points; fit ATE on `city_effect`; plug a *target* city's `city_effect` into the line to predict its ATE — instead of just averaging the 8.
+
 
 ```r
-# If we had multi-site data, we could model the heterogeneity
-cities_mod &lt;- lm(true_effect ~ supply_ratio, data = cities)
-cat("Effect per unit supply ratio:", round(coef(cities_mod)[2], 2), "\n")
+sample_8 &lt;- filter(cities_df, selected)
+fit &lt;- lm(local_effect ~ city_effect, data = sample_8)
+predict(fit, data.frame(city_effect = -0.05))   # moderator   → ≈ 0.03
 ```
 
 ```
-## Effect per unit supply ratio: 3.19
+##    1 
+## 0.03
 ```
 
 ```r
-# Predict for a new city
-new_city &lt;- data.frame(supply_ratio = 0.35)
-cat("Predicted effect for city with supply ratio 0.35:",
-    round(predict(cities_mod, new_city), 2), "\n")
+mean(sample_8$local_effect)                      # naive 8-city → ≈ 0.11
 ```
 
 ```
-## Predicted effect for city with supply ratio 0.35: 2.18
+## [1] 0.114612
 ```
+
+Same 8 cities of data → two different answers. Moderator says a thin-market city's ATE is ≈ 4× smaller than the naive guess.
+
+**Strategy 3: Understand the mechanism.** Zone-notification routes drivers to concentrated demand. **Strongest** where demand is concentrated (high `city_effect`), **weakest** in thin markets — exactly the heterogeneity we see in the data.
 ]
-
---
-
-**Strategy 3: Understand the mechanism**
-
-Why do price cuts increase rides? If it is because supply is elastic (more drivers come online), then it won't work where supply is constrained. Test the mechanism, not just the outcome.
-
----
-
-# Application: Do Research Results Generalize?
-
-&lt;img src="slides_files/figure-html/research-generalize-1.png" style="display: block; margin: auto;" /&gt;
-
---
-
-Results from 2015-2017 studies may not generalize to today: different PAP norms, larger samples, different publication incentives. **Temporal external validity** is a concern.
 
 ---
 
