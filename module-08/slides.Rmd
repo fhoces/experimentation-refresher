@@ -168,6 +168,8 @@ It's an assumption about *counterfactuals* — fundamentally untestable. We can 
 
 ---
 
+name: staggered-main
+
 # Staggered Adoption — What Changes
 
 Real rollouts don't happen all at once. Cities adopt zone-notification at different times.
@@ -185,8 +187,8 @@ panel <- expand_grid(city = 1:n_cities, t = 1:n_t) |>
     cohort = case_when(g == 8 ~ "Early (g=8)", g == 12 ~ "Mid (g=12)",
                        g == 16 ~ "Late (g=16)", TRUE ~ "Never"),
     # heterogeneous, time-varying effect: bigger for earlier cohorts
-    eff = if_else(treated, 0.6 * (1 + 0.05 * (t - g)) *
-                            (1 + 0.3 * (g == 8) - 0.2 * (g == 16)), 0),
+    eff = if_else(treated, 0.6 * (1 + 0.15 * (t - g)) *
+                            (1 + 0.7 * (g == 8) - 0.7 * (g == 16)), 0),
     y = 5 + 0.05 * t + city * 0.1 + eff + rnorm(n(), 0, 0.3)
   )
 ggplot(panel, aes(t, y, group = city, color = cohort)) +
@@ -200,9 +202,11 @@ ggplot(panel, aes(t, y, group = city, color = cohort)) +
 
 Three cohorts adopt at $t=8, 12, 16$; three never adopt. The effect grows over time and is **larger for earlier-adopting cohorts**.
 
-<a href="#staggered-dgp-detail" class="nav-btn">DGP code</a>
+<a href="#staggered-dgp-detail" class="nav-btn-br">DGP code</a>
 
 ---
+
+name: twfe-main
 
 # The TWFE Estimator — Looks Innocent, Isn't
 
@@ -230,12 +234,13 @@ The true effects are positive and grow over time. The TWFE coefficient is wrong 
 
 ---
 
+name: bacon-viz-main
+
 # Visualizing the Bacon Decomposition
 
-```{r bacon-viz, echo=FALSE, fig.height=4}
-# Hand-computed Bacon decomposition for our 4-cohort DGP
-panel_long <- panel |> mutate(D = as.integer(treated))
-# 2x2 DiDs: (treated cohort, control cohort, weight, estimate)
+$\hat\beta_{\text{TWFE}}$ is a **weighted average of every 2×2 DiD** in the data — each cohort vs every other cohort, plus each vs never-treated. With cohorts $g \in \{8, 12, 16, \infty\}$, that's **9 distinct 2×2 estimates**:
+
+```{r bacon-viz, echo=FALSE, fig.height=2.9}
 get_2x2 <- function(g_t, g_c, df, t_max) {
   if (is.infinite(g_c)) {
     pre <- 1:(g_t - 1); post <- g_t:t_max
@@ -244,34 +249,42 @@ get_2x2 <- function(g_t, g_c, df, t_max) {
   } else {
     pre <- (g_c):(g_t - 1); post <- g_t:t_max
   }
-  treated_pre  <- mean(df$y[df$g == g_t & df$t %in% pre])
-  treated_post <- mean(df$y[df$g == g_t & df$t %in% post])
-  control_pre  <- mean(df$y[df$g == g_c & df$t %in% pre])
-  control_post <- mean(df$y[df$g == g_c & df$t %in% post])
-  (treated_post - treated_pre) - (control_post - control_pre)
+  ya <- mean(df$y[df$g == g_t & df$t %in% pre])
+  yb <- mean(df$y[df$g == g_t & df$t %in% post])
+  yc <- mean(df$y[df$g == g_c & df$t %in% pre])
+  yd <- mean(df$y[df$g == g_c & df$t %in% post])
+  (yb - ya) - (yd - yc)
 }
 bacon <- expand_grid(g_t = c(8, 12, 16), g_c = c(8, 12, 16, Inf)) |>
   filter(g_t != g_c) |>
-  rowwise() |>
-  mutate(est = get_2x2(g_t, g_c, panel_long, n_t)) |>
-  ungroup() |>
+  rowwise() |> mutate(est = get_2x2(g_t, g_c, panel, n_t)) |> ungroup() |>
   mutate(comparison = case_when(
-    is.infinite(g_c) ~ "Treated vs Never",
-    g_c > g_t ~ "Earlier vs Later (later as control: clean)",
-    TRUE ~ "Later vs Earlier (earlier as control: PROBLEM)"
-  ))
-ggplot(bacon, aes(paste0("g=", g_t, " vs g=", ifelse(is.infinite(g_c), "∞", g_c)),
-                  est, fill = comparison)) +
+    is.infinite(g_c) ~ "Clean: treated vs never",
+    g_c > g_t ~ "Clean: treated vs not-yet-treated",
+    TRUE ~ "Forbidden: treated vs already-treated"
+  ),
+  label = paste0("treated g=", g_t, ",  control g=",
+                  ifelse(is.infinite(g_c), "never", g_c))) |>
+  arrange(comparison, est) |>
+  mutate(label = factor(label, levels = label))
+
+true_att <- mean(panel$eff[panel$treated])
+twfe_est <- coef(feols(y ~ treated | city + t, data = panel))["treatedTRUE"]
+
+ggplot(bacon, aes(label, est, fill = comparison)) +
   geom_col() + coord_flip() +
-  geom_hline(yintercept = 0) +
-  scale_fill_manual(values = c("Treated vs Never" = "#4daf4a",
-                                "Earlier vs Later (later as control: clean)" = "#377eb8",
-                                "Later vs Earlier (earlier as control: PROBLEM)" = "#e41a1c")) +
-  labs(x = NULL, y = "2×2 DiD estimate", fill = NULL) +
-  theme(legend.position = "bottom", legend.text = element_text(size = 8))
+  geom_hline(aes(yintercept = true_att, linetype = "Truth"), color = "#e65100", linewidth = 0.8) +
+  geom_hline(aes(yintercept = twfe_est, linetype = "TWFE estimate"), color = "black", linewidth = 0.8) +
+  scale_fill_manual(values = c("Clean: treated vs never" = "#4daf4a",
+                               "Clean: treated vs not-yet-treated" = "#377eb8",
+                               "Forbidden: treated vs already-treated" = "#e41a1c")) +
+  scale_linetype_manual(values = c("Truth" = "dashed", "TWFE estimate" = "dotted")) +
+  labs(x = NULL, y = "2×2 DiD estimate", fill = NULL, linetype = NULL) +
+  theme(legend.position = "right", legend.text = element_text(size = 8),
+        legend.box = "vertical")
 ```
 
-Red bars: when an *already-treated* cohort serves as the comparison, you difference out a treated trend. TWFE puts weight on these.
+The **red 2×2s** use an already-treated cohort as control — they difference out a treated trend, not a counterfactual. TWFE (dotted) averages them in anyway, landing far below truth (dashed). <a href="#goodman-bacon-derivation" class="inline-btn">why</a>
 
 ---
 
@@ -282,10 +295,10 @@ All four heterogeneity-robust estimators solve the same problem — only use **c
 .small[
 | Estimator | Year | Core idea | R package |
 |---|---|---|---|
-| **Callaway & Sant'Anna** | 2021 | Group-time ATT $(g, t)$, then aggregate | `did` |
+| **Callaway & Sant'Anna** | 2021 | Group-time ATT for each cohort g and time t, then aggregate | `did` |
 | **Sun & Abraham** | 2021 | Saturated event-study with cohort×event-time interactions | `fixest` (`sunab()`) |
 | **de Chaisemartin & D'Haultfœuille** | 2020 | Switchers vs not-yet-switchers | `DIDmultiplegt` |
-| **Borusyak, Jaravel, Spiess** | 2024 | Impute $Y(0)$ from never-treated, then average residuals | `didimputation` |
+| **Borusyak, Jaravel, Spiess** | 2024 | Impute the untreated outcome from never-treated, then average residuals | `didimputation` |
 ]
 
 .highlight-box[
@@ -293,6 +306,8 @@ All four converge in simple cases. Pick one, report the event-study plot, and ch
 ]
 
 ---
+
+name: cs-main
 
 # Callaway-Sant'Anna in Practice
 
@@ -331,10 +346,10 @@ Pretrend tests have low power. What if parallel trends is "almost but not quite"
 --
 
 Two common restrictions:
-- **Smoothness ($M$):** the post-treatment violation can be at most $M$ times larger than the largest pre-treatment violation.
+- **Smoothness, parameter M:** the post-treatment violation can be at most M times larger than the largest pre-treatment violation.
 - **Relative magnitudes:** the post-period violation cannot exceed the worst pre-period violation.
 
-The output is a *sensitivity plot*: the CI grows as you allow more violation. If your conclusion survives plausible $M$, you're robust.
+The output is a *sensitivity plot*: the CI grows as you allow more violation. If your conclusion survives plausible M, you're robust.
 
 <a href="#honest-did-detail" class="nav-btn">visualization</a>
 
@@ -391,48 +406,62 @@ treated_y  <- treated_y0
 treated_y[t_treat:n_T] <- treated_y[t_treat:n_T] - 0.8  # policy effect
 
 sc_long <- bind_rows(
-  tibble(t = 1:n_T, y = treated_y, unit = "Treated"),
+  tibble(t = 1:n_T, y = treated_y, kind = "Treated city", unit = "Treated"),
   expand_grid(t = 1:n_T, j = 1:n_donor) |>
-    mutate(y = donors[cbind(t, j)], unit = paste0("Donor ", j))
+    mutate(y = donors[cbind(t, j)], kind = "Donor pool",
+           unit = paste0("Donor ", j))
 )
 
-ggplot(sc_long, aes(t, y, group = unit,
-                    color = unit == "Treated", linewidth = unit == "Treated")) +
+ggplot(sc_long, aes(t, y, group = unit, color = kind, linewidth = kind)) +
   geom_line(alpha = 0.7) +
   geom_vline(xintercept = t_treat - 0.5, linetype = "dashed") +
-  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "firebrick"), guide = "none") +
-  scale_linewidth_manual(values = c("FALSE" = 0.5, "TRUE" = 1.2), guide = "none") +
-  labs(x = "Period", y = "Outcome")
+  annotate("text", x = t_treat - 0.5, y = max(sc_long$y) * 1.02,
+           label = "policy", hjust = 1.1, size = 3.5, color = "grey40") +
+  scale_color_manual(values = c("Treated city" = "firebrick",
+                                 "Donor pool"  = "grey60")) +
+  scale_linewidth_manual(values = c("Treated city" = 1.2, "Donor pool" = 0.5),
+                          guide = "none") +
+  labs(x = "Period", y = "Outcome", color = NULL) +
+  theme(legend.position = "top")
 ```
 
 No single donor matches. A **convex combination** might.
 
 ---
 
+name: sc-est-main
+
 # Synthetic Control: The Estimator
 
-Choose weights $w_j \ge 0$ with $\sum_j w_j = 1$ to match the treated unit's *pre-treatment* outcomes:
+Pick weights $w_j \ge 0$ with $\sum_j w_j = 1$ to match the treated unit's *pre-treatment* outcomes — a **convex combination** of donors:
 
-$$\min_{w} \sum_{t < T_0} \left( Y_{1t} - \sum_{j \ge 2} w_j Y_{jt} \right)^2 \;\; \text{s.t.}\;\; w_j \ge 0,\;\; \sum_j w_j = 1$$
+$$\min_{w} \sum_{t < T_0} \!\left( Y_{1t} - \sum_{j \ge 2} w_j Y_{jt} \right)^{\!2} \;\;\text{s.t.}\;\; w_j \ge 0,\;\; \sum_j w_j = 1$$
 
-.small[
-```{r sc-fit, fig.height=2.8}
-# NNLS-style projection on the simplex (simplified: quadprog or by hand)
+```{r sc-fit, echo=FALSE}
+library(quadprog)
 pre <- 1:(t_treat - 1)
 A <- donors[pre, ]; b <- treated_y[pre]
-# Project to simplex via solve.QP (quadratic prog)
-library(quadprog)
 Dmat <- 2 * t(A) %*% A; dvec <- 2 * t(A) %*% b
-Amat <- cbind(rep(1, n_donor), diag(n_donor))      # sum=1, w_j>=0
+Amat <- cbind(rep(1, n_donor), diag(n_donor))
 bvec <- c(1, rep(0, n_donor))
 w_hat <- solve.QP(Dmat, dvec, Amat, bvec, meq = 1)$solution
 synth_y <- as.numeric(donors %*% w_hat)
 gap <- treated_y - synth_y
-round(w_hat, 3)
 ```
-]
 
-The fitted weights match true weights closely on donors 1-3.
+```{r sc-counterfactual-plot, echo=FALSE, fig.height=2.6}
+tibble(t = 1:n_T, Treated = treated_y, Synthetic = synth_y) |>
+  pivot_longer(-t) |>
+  ggplot(aes(t, value, color = name, linetype = name)) +
+  geom_line(linewidth = 1.2) +
+  geom_vline(xintercept = t_treat - 0.5, linetype = "dashed", color = "grey50") +
+  scale_color_manual(values = c("Treated" = "firebrick", "Synthetic" = "steelblue")) +
+  scale_linetype_manual(values = c("Treated" = "solid", "Synthetic" = "dashed")) +
+  labs(x = "Period", y = "Outcome", color = NULL, linetype = NULL) +
+  theme(legend.position = "top")
+```
+
+The blue dashed line is the synthetic counterfactual: $\sum_j \hat w_j Y_{jt}$ where the $\hat w$ above are `r paste(round(w_hat[w_hat > 0.01], 2), collapse = ", ")`. <a href="#sc-code" class="inline-btn">code</a>
 
 ---
 
@@ -470,13 +499,15 @@ The treated gap (red) drops below the placebo cloud after $t=21$ — the effect 
 
 ---
 
+name: sdid-main
+
 # Synthetic DiD: The Bridge
 
 Arkhangelsky et al. (2021) generalize both DiD and SC. **Synthetic DiD** uses *two* sets of weights:
 
 .blue-box[
-- **Unit weights** ($\hat\omega_i$) — like SC, match pre-treatment trajectories of donors to the treated unit.
-- **Time weights** ($\hat\lambda_t$) — match pre-treatment outcomes of the treated unit to its own post-treatment level (down-weights periods that don't look like "now").
+- **Unit weights** $\hat\omega_i$ work like SC: match pre-treatment trajectories of donors to the treated unit.
+- **Time weights** $\hat\lambda_t$ match pre-treatment outcomes of the treated unit to its own post-treatment level — down-weighting periods that don't look like "now".
 ]
 
 .small[
@@ -518,6 +549,8 @@ Classic approach: pre-specify subgroups, run interactions. Two problems:
 
 ---
 
+name: cf-how-main
+
 # Causal Forest — How It Works
 
 .pull-left[
@@ -542,6 +575,8 @@ The result has pointwise confidence intervals — Wager & Athey prove asymptotic
 <a href="#cf-splitting-detail" class="nav-btn">splitting algorithm</a>
 
 ---
+
+name: cf-practice-main
 
 # Causal Forest in Practice — `grf`
 
@@ -586,8 +621,8 @@ $$\pi^*(x) = \mathbb{1}\{\hat\tau(x) > c(x)\}$$
 where $c(x)$ is a per-unit cost (e.g., the cost of pushing a notification).
 
 .blue-box[
-- **`grf::policy_tree`** — fit a depth-$L$ decision tree over $X$ that maximizes welfare. Output: an interpretable rule like *"deploy in dense cities to drivers with <2 years tenure."*
-- **Athey & Wager (2021):** regret bounds for these rules.
+- **`grf::policy_tree`** — fit a shallow decision tree over the covariates that maximizes estimated welfare. Output: an interpretable rule like *"deploy in dense cities to drivers with <2 years tenure."*
+- **Athey & Wager (2021)** prove these are **near-optimal policies**: the learned rule's welfare gets within a vanishing-with-sample-size gap of the *optimal* policy's. So the rule isn't just interpretable — it's provably close to the best rule you could have chosen if you knew the truth.
 ]
 
 This is what gets used to *deploy* the model. ATE answers "ship?". HTE answers "to whom?". Policy learning answers "**what should we actually do?**"
@@ -603,9 +638,9 @@ class: center, middle, inverse
 # Bandits — Adaptive Experimentation in One Slide
 
 .small[
-**Setup:** $K$ arms (e.g., 4 ad creatives). At each step, pick one, observe reward. Goal: maximize cumulative reward, not just identify the best arm.
+**Setup:** K arms (e.g., 4 ad creatives). At each step, pick one, observe reward. Goal: maximize cumulative reward, not just identify the best arm.
 
-**Thompson Sampling** (the workhorse): maintain a posterior over each arm's reward, sample from it, play the argmax. Asymptotically optimal regret; minimal tuning.
+**Thompson Sampling** is the workhorse: maintain a posterior over each arm's reward, sample from it, play the argmax. Asymptotically optimal regret; minimal tuning.
 ]
 
 ```{r bandit-quick, echo=FALSE, fig.height=2.4}
@@ -630,13 +665,15 @@ tibble(t = 1:T_steps, cum_reg = cumsum(reg)) |>
 
 ---
 
+name: seq-main
+
 # Sequential Testing in One Slide
 
 .small[
-**Problem:** classical $p$-values are valid only at one fixed $n$. Peeking inflates Type-I error — by $t=N$, the running $p$-value will dip below 0.05 about 30% of the time *under the null*.
+**Problem:** classical p-values are valid only at one fixed sample size. Peeking inflates Type-I error — by the end of the experiment, the running p-value will dip below 0.05 about 30% of the time *under the null*.
 
 **Two fixes used in industry:**
-- **Group-sequential / O'Brien-Fleming:** spend the $\alpha$ budget on a pre-specified schedule of looks. Conservative early, normal late.
+- **Group-sequential / O'Brien-Fleming:** spend the alpha budget on a pre-specified schedule of looks. Conservative early, normal late.
 - **Always-valid CIs / mSPRT:** mixture sequential probability ratio. Confidence sequences that hold *uniformly over time*. Stop whenever you want; CIs stay valid.
 ]
 
@@ -654,7 +691,7 @@ mean(peek_reject)   # Type-I rate from peeking — should be ~0.30
 ```
 
 .small[
-Under $H_0$, naive peeking yields ≈30% rejection rate, not 5%. mSPRT or OBF would hold this near 5%.
+Under the null, naive peeking yields ≈30% rejection rate, not 5%. mSPRT or OBF would hold this near 5%.
 ]
 
 <a href="#mSPRT-detail" class="nav-btn">mSPRT formula</a>
@@ -678,7 +715,7 @@ class: center, middle, inverse
 
 **Single treated unit?** → **Synthetic control** (or **SDID** if you have a moderate-size donor pool).
 
-**Want effect heterogeneity?** → **Causal forest** for $\hat\tau(x)$; **policy tree** for an interpretable deployment rule.
+**Want effect heterogeneity?** → **Causal forest** for treatment effects as a function of covariates; **policy tree** for an interpretable deployment rule.
 
 **Many arms, online learning?** → **Thompson Sampling**, *unless* you need a clean ATE.
 
@@ -698,7 +735,7 @@ class: center, middle, inverse
 ]
 
 .blue-box[
-**"How do you get heterogeneous treatment effects?"** Causal forest from `grf`. Honest splitting prevents over-fit. Aggregate to ATE for sanity-check; predict $\hat\tau(x)$ for new units; feed into a policy tree if a deployment rule is needed.
+**"How do you get heterogeneous treatment effects?"** Causal forest from `grf`. Honest splitting prevents over-fit. Aggregate to ATE for sanity-check; predict per-unit treatment effects from the covariates; feed into a policy tree if a deployment rule is needed.
 ]
 
 .highlight-box[
@@ -738,12 +775,9 @@ name: pretrend-power-detail
 
 # Backup: The Roth (2022) Pretrend Critique
 
-The standard pretrend test asks: do the pre-treatment leads have $p > 0.05$? Failing to reject is taken as evidence parallel trends holds.
+**The standard pretrend test** has low power against linear (or near-linear) violations — exactly the kind that would bias the post-treatment estimate.
 
-**The problem:** these tests have low power against linear (or near-linear) violations — exactly the kind that would bias the post-treatment estimate.
-
-```{r roth-power, echo=FALSE, fig.height=3.2}
-# Simulate: under a linear violation, what's the prob of detecting it?
+```{r roth-power, echo=FALSE, fig.height=2.6}
 sim_power <- function(slope, n_pre = 4, sd = 1, n_sim = 1000) {
   mean(replicate(n_sim, {
     pre_diffs <- slope * (-n_pre:-1) + rnorm(n_pre, 0, sd)
@@ -757,7 +791,7 @@ ggplot(df, aes(slope, power)) + geom_line(linewidth = 1, color = "firebrick") +
   labs(x = "True linear pre-trend slope", y = "Power to detect")
 ```
 
-Even a *meaningful* linear violation is missed most of the time. Roth's recommendation: use Honest DiD bounds rather than relying on the pretrend test.
+A meaningful linear violation is missed most of the time. Roth's recommendation: use Honest DiD bounds, not the pretrend test.
 
 <a href="#parallel-trends-main" class="nav-btn">← back</a>
 
@@ -778,8 +812,8 @@ panel <- expand_grid(city = 1:n_cities, t = 1:n_t) |>
   mutate(
     treated = t >= g,
     # heterogeneous, time-varying effect: bigger for earlier cohorts
-    eff = if_else(treated, 0.6 * (1 + 0.05 * (t - g)) *
-                            (1 + 0.3 * (g == 8) - 0.2 * (g == 16)), 0),
+    eff = if_else(treated, 0.6 * (1 + 0.15 * (t - g)) *
+                            (1 + 0.7 * (g == 8) - 0.7 * (g == 16)), 0),
     y = 5 + 0.05 * t + city * 0.1 + eff + rnorm(n(), 0, 0.3)
   )
 ```
@@ -787,7 +821,7 @@ panel <- expand_grid(city = 1:n_cities, t = 1:n_t) |>
 
 Three cohorts adopt at $t = 8, 12, 16$; three never adopt. Effect grows over time and is **larger for earlier cohorts** — the classic case where TWFE breaks.
 
-<a href="#staggered-adoption-what-changes" class="nav-btn">← back</a>
+<a href="#staggered-main" class="nav-btn">← back</a>
 
 ---
 name: goodman-bacon-derivation
@@ -810,7 +844,7 @@ where each $\widehat{\text{ATT}}_k$ is a 2×2 DiD between two cohorts (or a coho
 If treatment effects grow over time, this 2×2 gets a *negative* contribution. TWFE's "weighted average" puts positive weight on this, biasing $\hat\beta$ downward.
 ]
 
-<a href="#the-twfe-estimator-looks-innocent-isnt" class="nav-btn">← back</a>
+<a href="#twfe-main" class="nav-btn">← back</a>
 
 ---
 name: honest-did-detail
@@ -842,6 +876,33 @@ The smallest $M$ at which the CI crosses zero is the **breakdown value** — how
 <a href="#honest-did-main" class="nav-btn">← back</a>
 
 ---
+name: sc-code
+
+# Backup: Synthetic Control via `solve.QP`
+
+.small[
+```{r sc-fit-show, eval=FALSE}
+library(quadprog)
+pre <- 1:(t_treat - 1)
+A <- donors[pre, ]; b <- treated_y[pre]
+
+# Quadratic program:
+#   minimize  || A w - b ||^2     subject to  w_j >= 0,  sum_j w_j = 1
+Dmat <- 2 * t(A) %*% A
+dvec <- 2 * t(A) %*% b
+Amat <- cbind(rep(1, n_donor), diag(n_donor))   # constraints stacked
+bvec <- c(1, rep(0, n_donor))                   # 1 for sum=1, 0 for w >= 0
+w_hat   <- solve.QP(Dmat, dvec, Amat, bvec, meq = 1)$solution
+synth_y <- as.numeric(donors %*% w_hat)
+gap     <- treated_y - synth_y
+```
+]
+
+`solve.QP` minimizes $\frac{1}{2} w^\top D w - d^\top w$ subject to $A^\top w \ge b$, with `meq` flagging the first constraint as equality. Production code uses `Synth::synth()`, which adds a covariate-importance V-matrix and a nested optimization.
+
+<a href="#sc-est-main" class="nav-btn">← back</a>
+
+---
 name: sdid-detail
 
 # Backup: SDID Estimator Mechanics
@@ -860,7 +921,7 @@ where $\hat\omega_i$ are unit weights from a regularized SC-style fit, and $\hat
 
 R implementation: `synthdid::synthdid_estimate()`. The package returns the estimate, jackknife SE, and a built-in SC vs DiD vs SDID comparison plot.
 
-<a href="#synthetic-did-the-bridge" class="nav-btn">← back</a>
+<a href="#sdid-main" class="nav-btn">← back</a>
 
 ---
 name: cs-code
@@ -884,7 +945,7 @@ att_gt <- cohort_means |> left_join(never_means, by = "t") |>
 
 This is the simplest version: each cohort vs never-treated, anchored at $t = g - 1$. Production CS adds: not-yet-treated (vs only never-treated) controls, doubly-robust adjustment, and influence-function based standard errors. The `did` package implements all three.
 
-<a href="#callaway-santanna-in-practice" class="nav-btn">← back</a>
+<a href="#cs-main" class="nav-btn">← back</a>
 
 ---
 name: cf-dgp
@@ -908,7 +969,7 @@ Y <- 700 + 50 * X$age * 0.5 + true_tau * W + rnorm(n, 0, 80)
 
 The HTE pattern: drivers in dense cities benefit most ($+\$60$/wk per density unit); long-tenured drivers benefit less (already routing efficiently). The forest must recover this without us specifying the functional form.
 
-<a href="#causal-forest-in-practice-grf" class="nav-btn">← back</a>
+<a href="#cf-practice-main" class="nav-btn">← back</a>
 
 ---
 name: cf-splitting-detail
@@ -929,7 +990,7 @@ where $\hat\tau_L, \hat\tau_R$ are local treatment-effect estimates inside each 
 **Honesty:** within a tree, sample-splitting separates the data used to *grow* the tree from the data used to *estimate $\hat\tau$ inside leaves*. Without this, the same noise that drove the split would inflate the estimated effect inside the leaf — exactly the over-fit that vanilla trees suffer.
 ]
 
-<a href="#causal-forest-how-it-works" class="nav-btn">← back</a>
+<a href="#cf-how-main" class="nav-btn">← back</a>
 
 ---
 name: mSPRT-detail
@@ -952,4 +1013,4 @@ for a chosen mixing scale $\rho$. The CI shrinks like $\sqrt{(\log t) / t}$ — 
 **Used in industry by:** Optimizely (mSPRT), Microsoft (group-sequential + mSPRT), Netflix (sequential testing platform).
 ]
 
-<a href="#sequential-testing-in-one-slide" class="nav-btn">← back</a>
+<a href="#seq-main" class="nav-btn">← back</a>
