@@ -38,6 +38,43 @@ class: center, middle, inverse, title-slide
   padding: 0.5em 1em;
   margin: 0.5em 0;
 }
+.inline-btn {
+  font-size: 11px;
+  background: #e8eaf6;
+  padding: 2px 8px;
+  border-radius: 3px;
+  text-decoration: none;
+  color: #1a237e;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.inline-btn:hover { background: #c5cae9; }
+.nav-btn {
+  position: absolute;
+  bottom: 12px;
+  left: 40px;
+  font-size: 11px;
+  background: #e8eaf6;
+  padding: 2px 8px;
+  border-radius: 3px;
+  z-index: 100;
+  text-decoration: none;
+  color: #1a237e;
+}
+.nav-btn:hover { background: #c5cae9; }
+.nav-btn-br {
+  position: absolute;
+  bottom: 12px;
+  right: 70px;
+  font-size: 11px;
+  background: #e8eaf6;
+  padding: 2px 8px;
+  border-radius: 3px;
+  z-index: 100;
+  text-decoration: none;
+  color: #1a237e;
+}
+.nav-btn-br:hover { background: #c5cae9; }
 &lt;/style&gt;
 
 
@@ -60,38 +97,40 @@ class: center, middle, inverse, title-slide
 
 # Start Simple: Difference in Means
 
+.small[
 Same zone-notification experiment as Module 1, now with **weekly earnings** as the primary outcome (continuous — easier to demonstrate variance reduction).
 
 
 ```r
 n &lt;- 2000
-drivers &lt;- tibble(
+drivers &lt;- tibble(                                     # ~$500/wk baseline; +$50/wk effect
   id = 1:n,
-  pre_earnings = rlnorm(n, meanlog = 6.2, sdlog = 0.4),  # ~$500/wk baseline
+  pre_earnings = rlnorm(n, meanlog = 6.2, sdlog = 0.4),
   notification = rep(c(0, 1), each = n / 2),
-  # True effect: +$50/wk. Noise correlated with pre_earnings.
-  post_earnings = pre_earnings + 50 * notification +
-                  rnorm(n, sd = 80)
+  post_earnings = pre_earnings + 50 * notification + rnorm(n, sd = 80)
 )
 ```
 
---
-
 
 ```r
-mean(drivers$post_earnings[drivers$notification == 1]) -
-  mean(drivers$post_earnings[drivers$notification == 0])
+drivers |&gt;
+  group_by(notification) |&gt;
+  summarise(mean_earn = mean(post_earnings)) |&gt;
+  summarise(ate = mean_earn[notification == 1] - mean_earn[notification == 0])
 ```
 
 ```
-## [1] 51.56707
+## # A tibble: 1 × 1
+##     ate
+##   &lt;dbl&gt;
+## 1  51.6
 ```
 
---
-
-This is unbiased for the ATE. But the standard error is large because `post_earnings` is noisy.
+Unbiased for the ATE. But the standard error is large because `post_earnings` is noisy.
+]
 
 ---
+name: ols-equals-dim-main
 
 # Regression: Same Thing, More Flexible
 
@@ -116,6 +155,8 @@ The coefficient on `notification` is identical to the difference in means.
 .blue-box[
 **Key fact:** In a randomized experiment with no covariates, OLS regression of `\(Y\)` on `\(D\)` gives exactly the difference in means. The regression framework just makes it easier to add covariates and compute standard errors.
 ]
+
+&lt;a href="#ols-equals-dim" class="nav-btn"&gt;proof&lt;/a&gt;
 
 ---
 
@@ -162,6 +203,18 @@ The standard error dropped substantially. Same data, same experiment, but a **ti
 
 ---
 
+# How Much Does the Covariate Help?
+
+Vary the SD of pre-treatment earnings (holding the post-treatment noise fixed at `\(\sigma_\varepsilon = 80\)`) and re-fit both regressions:
+
+&lt;img src="slides_files/figure-html/se-vs-pre-1.png" style="display: block; margin: auto;" /&gt;
+
+.small[
+The unadjusted regression treats *all* of `post_earnings`'s variance as noise. The adjusted regression strips out the part explained by `pre_earnings`, so only `\(\sigma_\varepsilon\)` remains. The wider the gap, the more variance reduction you buy.
+]
+
+---
+
 # Lin (2013): Covariate Adjustment Done Right
 
 Simply adding covariates to a regression can be slightly wrong when treatment effects are heterogeneous. Lin (2013) showed the right way:
@@ -202,19 +255,12 @@ The treatment effect estimate is the coefficient on `notification`.
 
 # CUPED: Variance Reduction Using Pre-Experiment Data
 
-.blue-box[
+.small[
 **CUPED** (Controlled-experiment Using Pre-Experiment Data): Use the pre-treatment outcome to reduce variance of the treatment effect estimate. Widely used at Microsoft, Netflix, and other tech companies.
-]
 
---
-
-The idea: construct a variance-reduced outcome:
-
+The idea: construct a variance-reduced outcome
 `$$\tilde{Y}_i = Y_i - \theta (X_i - \bar{X})$$`
-
-where `\(X_i\)` is the pre-treatment outcome and `\(\theta = \frac{\text{Cov}(Y, X)}{\text{Var}(X)}\)`.
-
---
+where X is the pre-treatment outcome and theta is the OLS slope of Y on X (Cov(Y, X) / Var(X)).
 
 
 ```r
@@ -224,7 +270,6 @@ drivers &lt;- drivers |&gt;
   mutate(y_cuped = post_earnings -
                    theta * (pre_earnings - mean(pre_earnings)))
 
-# Compare variance
 cat("Var(post_earnings):", round(var(drivers$post_earnings), 0), "\n")
 ```
 
@@ -248,8 +293,10 @@ cat("Variance reduction:",
 ```
 ## Variance reduction: 0.874
 ```
+]
 
 ---
+name: cuped-regression-main
 
 # CUPED = Regression (It's the Same Thing)
 
@@ -285,6 +332,8 @@ cat("Regression estimate:", round(reg_est, 2), "\n")
 Why use CUPED framing? It's easier to implement in production pipelines (you transform the metric once, then compute simple means).
 ]
 
+&lt;a href="#cuped-fwl" class="nav-btn"&gt;FWL connection&lt;/a&gt;
+
 ---
 
 # Simulation: CUPED Variance Reduction
@@ -306,6 +355,9 @@ Both centered on the truth, but CUPED has a much narrower spread.
 # Stratify by pre_earnings tercile
 drivers_strat &lt;- drivers |&gt;
   mutate(stratum = ntile(pre_earnings, 3),
+         # Within each stratum, assign half to treatment (1) and half to control (0).
+         # ave() applies the function group-wise; we feed it row indices and ignore
+         # them — the function just returns a shuffled 0/1 vector of the right length.
          notif_strat = ave(1:n(), stratum, FUN = function(x)
            sample(rep(c(0, 1), length.out = length(x)))))
 
@@ -317,8 +369,8 @@ summary(fit_strat)$coefficients[1:2, ] |&gt; round(3)
 
 ```
 ##             Estimate Std. Error t value Pr(&gt;|t|)
-## (Intercept)  341.420      6.516  52.394    0.000
-## notif_strat   12.079      6.520   1.853    0.064
+## (Intercept)  345.451      6.521  52.972    0.000
+## notif_strat    4.006      6.525   0.614    0.539
 ```
 
 --
@@ -383,6 +435,7 @@ For **cluster-randomized** designs, cluster the standard errors at the level of 
 
 Not every driver assigned to the notification feature actually receives notifications — some have notifications disabled at the OS level, some opt out in-app.
 
+.small[
 
 ```r
 n &lt;- 2000
@@ -397,43 +450,45 @@ experiment &lt;- tibble(
                   rnorm(n, sd = 60)
 )
 ```
+]
 
 --
 
 .pull-left[
 **ITT** (Intent-to-Treat):
+.small[
 
 ```r
-itt &lt;- mean(experiment$post_earnings[experiment$assigned == 1]) -
-       mean(experiment$post_earnings[experiment$assigned == 0])
+itt &lt;- experiment |&gt;
+  group_by(assigned) |&gt;
+  summarise(m = mean(post_earnings)) |&gt;
+  pull(m) |&gt; diff()
 cat("ITT: $", round(itt, 1))
 ```
 
 ```
-## ITT: $ 40.6
+## ITT: $ 42
 ```
+]
 ]
 
 .pull-right[
 **LATE** (Local Average Treatment Effect):
+.small[
 
 ```r
-compliance_rate &lt;- mean(experiment$receives_notif[experiment$assigned == 1])
+compliance_rate &lt;- experiment |&gt;
+  filter(assigned == 1) |&gt;
+  pull(receives_notif) |&gt; mean()
 late &lt;- itt / compliance_rate
-cat("LATE: $", round(late, 1), "\n")
+cat("LATE: $", round(late, 1),
+    "| Compliance:", round(compliance_rate, 2))
 ```
 
 ```
-## LATE: $ 59.7
+## LATE: $ 59.8 | Compliance: 0.7
 ```
-
-```r
-cat("Compliance:", round(compliance_rate, 2))
-```
-
-```
-## Compliance: 0.68
-```
+]
 ]
 
 ---
@@ -451,9 +506,9 @@ cat("Compliance:", round(compliance_rate, 2))
 
 |Estimand                      | Estimate|Issue                         |
 |:-----------------------------|--------:|:-----------------------------|
-|ITT (OLS on assignment)       |     40.6|Diluted by non-compliance     |
-|LATE (IV / Wald)              |     59.7|Accounts for non-compliance   |
-|Naive (OLS on actual receipt) |     59.6|BIASED: receipt is endogenous |
+|ITT (OLS on assignment)       |     42.0|Diluted by non-compliance     |
+|LATE (IV / Wald)              |     59.8|Accounts for non-compliance   |
+|Naive (OLS on actual receipt) |     52.5|BIASED: receipt is endogenous |
 
 --
 
@@ -499,33 +554,40 @@ studies &lt;- tibble(
 
 # DiD: Estimating Treatment Effects
 
+.small[
 
 ```r
-# Reshape to panel
+# Reshape to panel (DiD needs long format)
 panel &lt;- studies |&gt;
-  pivot_longer(cols = c(y_pre, y_post), names_to = "period",
+  pivot_longer(c(y_pre, y_post), names_to = "period",
                values_to = "y_report", names_prefix = "y_") |&gt;
   mutate(post = if_else(period == "post", 1, 0))
 
-# DiD regression with study fixed effects
-fit_did &lt;- lm(y_report ~ factor(study_id) + post:factor(arm), data = panel)
-
-# Extract treatment effects (post x arm interactions)
-did_coefs &lt;- coef(fit_did)
-treat_effects &lt;- did_coefs[grep("post:factor\\(arm\\)", names(did_coefs))]
-names(treat_effects) &lt;- c("T1 vs T0", "T2 vs T0", "T3 vs T0")
-round(treat_effects, 3)
+# Cross-section (post-only) vs DiD (panel + study FE, T0 baseline)
+fit_cs  &lt;- lm(y_post ~ arm, data = studies)
+fit_did &lt;- lm(y_report ~ factor(study_id) + post * arm, data = panel)
 ```
-
-```
-## T1 vs T0 T2 vs T0 T3 vs T0     &lt;NA&gt; 
-##    0.009    0.035    0.059    0.118
-```
+]
 
 --
 
+.pull-left[
+.small[
+
+|arm      | truth|    cs| cs_se|   did| did_se|
+|:--------|-----:|-----:|-----:|-----:|------:|
+|T1 vs T0 |  0.03| 0.060| 0.039| 0.027|  0.016|
+|T2 vs T0 |  0.06| 0.055| 0.039| 0.051|  0.016|
+|T3 vs T0 |  0.10| 0.159| 0.039| 0.109|  0.016|
+]
+]
+
+.pull-right[
 .highlight-box[
-**DiD** removes time-invariant study-level confounders. Each study is its own control. The identifying assumption: absent treatment, reporting rates would have changed equally across arms (parallel trends).
+.small[
+Both unbiased (arm is randomized). **DiD shrinks SE ~2×** by absorbing study fixed effects — same trick as CUPED. Identifying assumption: parallel trends.
+]
+]
 ]
 
 ---
@@ -606,35 +668,81 @@ class: center, middle, inverse
 # Backup Slides
 
 ---
+name: ols-equals-dim
+
+# Backup: Why OLS = Difference in Means
+
+For randomized `\(D \in \{0, 1\}\)`, run OLS of `\(Y\)` on `\(D\)` with intercept:
+`$$\widehat{Y}_i = \hat\alpha + \hat\beta D_i.$$`
+
+OLS minimizes `\(\sum_i (Y_i - \hat\alpha - \hat\beta D_i)^2\)`. **Split the sum by treatment status:**
+`$$\sum_{D_i = 0} (Y_i - \hat\alpha)^2 \;+\; \sum_{D_i = 1} (Y_i - \hat\alpha - \hat\beta)^2.$$`
+
+--
+
+Each piece is a "fit a single number to a sample" problem. The minimizer is the corresponding group mean:
+
+`$$\hat\alpha = \bar{Y}_0 \quad\text{and}\quad \hat\alpha + \hat\beta = \bar{Y}_1.$$`
+
+--
+
+Therefore
+
+`$$\boxed{\;\hat\beta_{\text{OLS}} \;=\; \bar{Y}_1 - \bar{Y}_0 \;=\; \widehat{\text{ATE}}.\;}$$`
+
+--
+
+This is **exact in finite samples**, not just asymptotic. The same algebra goes through in a regression with covariates, but only when the covariates are *centered and interacted with* `\(D\)` — that's the Lin (2013) estimator. &lt;a href="#lin-proof" class="inline-btn"&gt;Lin proof&lt;/a&gt;
+
+&lt;a href="#ols-equals-dim-main" class="nav-btn-br"&gt;← back&lt;/a&gt;
+
+---
 name: cuped-derivation
 
 # Backup: CUPED Derivation
 
-We want to estimate `\(\tau = E[Y(1)] - E[Y(0)]\)` with minimum variance.
+Estimate `\(\tau = E[Y(1)] - E[Y(0)]\)` with minimum variance.
 
-**Step 1:** Define a new random variable:
-`$$\tilde{Y}_i = Y_i - \theta(X_i - E[X])$$`
-
-where `\(X_i\)` is a pre-treatment covariate (e.g., last period's outcome).
-
---
+**Step 1:** Define `\(\tilde{Y}_i = Y_i - \theta(X_i - E[X])\)` where `\(X_i\)` is a pre-treatment covariate.
 
 **Step 2:** The variance of the difference in means of `\(\tilde{Y}\)` is:
 `$$\text{Var}(\hat{\tau}_{\text{CUPED}}) = \text{Var}(\hat{\tau}_{\text{raw}}) + \theta^2 \text{Var}(\bar{X}_T - \bar{X}_C) - 2\theta \text{Cov}(\hat{\tau}_{\text{raw}}, \bar{X}_T - \bar{X}_C)$$`
 
---
-
 **Step 3:** Minimize over `\(\theta\)`:
 `$$\theta^* = \frac{\text{Cov}(Y, X)}{\text{Var}(X)}$$`
 
-This is the OLS coefficient from regressing `\(Y\)` on `\(X\)` — CUPED is regression.
-
---
+(The OLS coefficient from regressing `\(Y\)` on `\(X\)` — CUPED is regression.)
 
 **Step 4:** Variance reduction:
 `$$\frac{\text{Var}(\hat{\tau}_{\text{CUPED}})}{\text{Var}(\hat{\tau}_{\text{raw}})} = 1 - \text{Corr}(Y, X)^2$$`
 
-If `\(\text{Corr}(Y, X) = 0.7\)`, variance reduction = 51%.
+&lt;a href="#cuped-regression-main" class="nav-btn"&gt;← back&lt;/a&gt;
+
+---
+name: cuped-fwl
+
+# Backup: CUPED ↔ FWL / Residualization
+
+.small[
+**Frisch–Waugh–Lovell.** To recover `\(\hat\beta\)` from `\(Y = \alpha + \beta D + \gamma X + \varepsilon\)`:
+
+1. Residualize `\(Y\)` on `\(X\)`: `\(\tilde Y = Y - \hat\gamma_Y X\)` (with `\(\hat\gamma_Y = \text{Cov}(Y,X)/\text{Var}(X)\)`)
+2. Residualize `\(D\)` on `\(X\)`: `\(\tilde D = D - \hat\gamma_D X\)`
+3. Regress `\(\tilde Y\)` on `\(\tilde D\)`. The coefficient equals `\(\hat\beta\)` from the full regression.
+
+**In a randomized experiment, `\(D \perp X\)` by design.** So `\(\hat\gamma_D \to 0\)` and step 2 collapses: `\(\tilde D = D - \bar D\)` — no residualization needed.
+
+What remains is exactly CUPED:
+`$$\tilde Y_i = Y_i - \theta(X_i - \bar X), \quad \theta = \frac{\text{Cov}(Y, X)}{\text{Var}(X)}$$`
+then compare means by `\(D\)`. The `\(\theta\)` in CUPED *is* the OLS slope `\(\hat\gamma_Y\)` from FWL's first step. CUPED is the experiment-only shortcut: in observational settings, where `\(D\)` is not independent of `\(X\)`, you have to residualize `\(D\)` too — i.e., go back to full FWL.
+
+| Setting | Residualize Y? | Residualize D? |
+|---|---|---|
+| Observational (D not indep. X) | yes | yes — full FWL |
+| Experiment (D indep. X) | yes | **no — that's CUPED** |
+]
+
+&lt;a href="#cuped-regression-main" class="nav-btn"&gt;← back&lt;/a&gt;
 
 ---
 name: lin-proof

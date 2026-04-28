@@ -86,7 +86,7 @@ set.seed(42)
 <tr><td>2</td><td><a href="../module-02/slides.html">SUTVA and When It Breaks</a></td><td>✓ done</td></tr>
 <tr><td><b>3</b></td><td><b>Designing Around Interference</b> <i>(you are here)</i></td><td>current</td></tr>
 <tr><td>4</td><td>Power and Sample Size</td><td>upcoming</td></tr>
-<tr><td>5</td><td>Analyzing Experiments</td><td>upcoming</td></tr>
+<tr><td>5</td><td><a href="../module-05/slides.html">Analyzing Experiments</a></td><td>✓ done</td></tr>
 <tr><td>6</td><td>Multiple Testing & Subgroups</td><td>upcoming</td></tr>
 <tr><td>7</td><td><a href="../module-07/slides.html">External Validity</a></td><td>✓ done</td></tr>
 <tr><td>8</td><td>Advanced Topics</td><td>upcoming</td></tr>
@@ -982,7 +982,7 @@ See `exercise.R` for the starter code.
 <tr><td>2</td><td><a href="../module-02/slides.html">SUTVA and When It Breaks</a></td><td>✓ done</td></tr>
 <tr><td><b>3</b></td><td><b>Designing Around Interference</b> <i>(just finished)</i></td><td>✓ done</td></tr>
 <tr><td>4</td><td>Power and Sample Size</td><td>up next</td></tr>
-<tr><td>5</td><td>Analyzing Experiments</td><td>upcoming</td></tr>
+<tr><td>5</td><td><a href="../module-05/slides.html">Analyzing Experiments</a></td><td>✓ done</td></tr>
 <tr><td>6</td><td>Multiple Testing & Subgroups</td><td>upcoming</td></tr>
 <tr><td>7</td><td><a href="../module-07/slides.html">External Validity</a></td><td>✓ done</td></tr>
 <tr><td>8</td><td>Advanced Topics</td><td>upcoming</td></tr>

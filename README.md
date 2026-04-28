@@ -20,7 +20,7 @@ academic research.
 | **2** | [SUTVA and When It Breaks](module-02/) ([slides](https://fhoces.github.io/experimentation-refresher/module-02/slides.html)) | Interference, marketplace effects, network spillovers | Zone crowding + co-author spillovers |
 | **3** | [Designing Around Interference](module-03/) ([slides](https://fhoces.github.io/experimentation-refresher/module-03/slides.html)) | Cluster randomization, switchback, geo experiments | City-level pricing experiments |
 | 4 | Power and Sample Size | MDE, simulation-based power, clustering effects, ICC | A/B test planning for ad formats |
-| 5 | Analyzing Experiments | Regression adjustment, CUPED, ITT vs LATE, PAPs | Covariate adjustment for driver experiments |
+| **5** | [Analyzing Experiments](module-05/) ([slides](https://fhoces.github.io/experimentation-refresher/module-05/slides.html)) | Regression adjustment, CUPED, ITT vs LATE, PAPs | Covariate adjustment for driver experiments |
 | 6 | Multiple Testing & Subgroups | Bonferroni, BH, pre-specified subgroups, forking paths | Testing multiple ad creatives |
 | **7** | [External Validity](module-07/) ([slides](https://fhoces.github.io/experimentation-refresher/module-07/slides.html)) | Site selection, transportability, temporal validity | Cross-city generalization |
 | 8 | Advanced Topics | Synthetic control, bandits, sequential testing, DiD | Feature rollout and adaptive experiments |
