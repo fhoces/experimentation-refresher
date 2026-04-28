@@ -117,16 +117,32 @@ and practical design choices for marketplace experiments.
   Show when/why extrapolation fails.
 
 ## Module 8: Advanced Topics for Tech Interviews
-- Synthetic control for when you can't randomize
-- Regression discontinuity: sharp and fuzzy (quick review)
-- Difference-in-differences: parallel trends and violations
-- Bandits and adaptive experimentation: explore vs exploit
-- Sequential testing: peeking at results and when to stop
-- Metric selection: guardrail vs success metrics, surrogate outcomes
-- Common interview questions and frameworks
-- **Application — Ride-sharing:** Synthetic control for a policy change in
-  one city. Sequential testing for a feature rollout.
-- **Exercise (R):** Implement a simple bandit. Compare to fixed-sample A/B test.
+Focus: when randomization isn't available or isn't enough — modern DiD,
+synthetic control, and heterogeneous treatment effects via causal forests.
+- **Modern DiD** — parallel trends and pretrend testing pitfalls
+  (Roth 2022); the staggered-adoption problem; Goodman-Bacon (2021)
+  decomposition and TWFE negative weights; the heterogeneity-robust
+  estimators (Callaway & Sant'Anna 2021, Sun & Abraham 2021,
+  de Chaisemartin & D'Haultfœuille 2020, Borusyak et al. 2024); Honest
+  DiD (Rambachan & Roth 2023) bounds under partial PT violations.
+- **Synthetic control + Synthetic DiD** — Abadie/Diamond/Hainmueller
+  weighted donor-pool estimator, placebo inference, and the
+  Arkhangelsky et al. (2021) bridge to DiD via dual time + unit weights.
+- **Causal forest** — Wager & Athey (2018) honest splitting; the `grf`
+  package; HTE estimation as a building block for policy learning.
+- **One-pagers** — bandits (explore-exploit), sequential testing
+  (peeking, mSPRT/always-valid CIs).
+- **Application — Ride-sharing:** Staggered rollout of a
+  zone-notification feature across cities — show TWFE bias vs
+  Callaway-Sant'Anna; synthetic-control / SDID for a one-city policy
+  change; causal forest for HTE by city + driver tenure.
+- **Exercise (R):** (a) detect TWFE bias on simulated staggered data via
+  Goodman-Bacon, (b) build a synthetic control by hand (NNLS) and
+  compare to SDID, (c) fit a causal forest and recover the true
+  treatment heterogeneity.
+- **Backup slides** — Goodman-Bacon derivation; CS estimator formal
+  definition; staggered-adoption DGP; SC / SDID DGP; honest-DiD bounds;
+  causal forest splitting algorithm; policy-learning detail.
 
 ---
 

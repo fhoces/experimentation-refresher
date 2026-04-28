@@ -1,277 +1,192 @@
 # ============================================================================
-# Module 8 Exercise: Advanced Topics for Tech Interviews
+# Module 8 Exercise: Beyond the A/B Test
 # ============================================================================
 #
-# Implement Thompson Sampling, demonstrate peeking problems, build a
-# simple sequential test, and construct a basic synthetic control.
+# Three drills:
+#   Q1. Detect TWFE bias on staggered data via Goodman-Bacon.
+#   Q2. Build a synthetic control by hand (NNLS / quadprog) and compare to SDID.
+#   Q3. Fit a causal forest and recover the true treatment heterogeneity.
 #
-# Instructions: work through each section, run the code, answer the
-# questions in comments. Fill in blanks marked with _____.
+# Required: tidyverse, fixest, quadprog, grf
+#   install.packages(c("fixest", "quadprog", "grf"))
+# ============================================================================
 
 library(tidyverse)
+library(fixest)
+library(quadprog)
+library(grf)
 set.seed(42)
 
-# --- 1. Thompson Sampling Bandit ---------------------------------------------
 
-# Setup: 3 arms with unknown conversion rates
-true_rates <- c(A = 0.10, B = 0.13, C = 0.09)
-n_rounds <- 2000
+# ===== Q1. Goodman-Bacon — Catch TWFE in the Act =====
+#
+# Simulate a staggered-adoption panel where the true effect:
+#   - is positive on average,
+#   - is *larger for earlier-adopting cohorts*,
+#   - grows with event time.
+#
+# Then fit TWFE and compare to Sun-Abraham. The TWFE estimate should be
+# noticeably smaller than the truth — sometimes wrong-signed.
 
-# Initialize Beta priors (uniform)
-alpha_prior <- c(A = 1, B = 1, C = 1)
-beta_prior <- c(A = 1, B = 1, C = 1)
-
-# Storage
-ts_choices <- character(n_rounds)
-ts_rewards <- numeric(n_rounds)
-
-# Q1: Implement Thompson Sampling
-for (i in 1:n_rounds) {
-  # Draw from posterior for each arm
-  draws <- rbeta(3, _____, _____)
-
-  # Choose the arm with the highest draw
-  chosen <- _____
-
-  # Simulate reward
-  reward <- rbinom(1, 1, true_rates[chosen])
-
-  # Update posterior
-  alpha_prior[chosen] <- alpha_prior[chosen] + _____
-  beta_prior[chosen] <- beta_prior[chosen] + _____
-
-  ts_choices[i] <- names(true_rates)[chosen]
-  ts_rewards[i] <- reward
-}
-
-# Check: what fraction went to each arm?
-table(ts_choices) / n_rounds
-
-# Q2: Compare to fixed A/B/C test (equal allocation)
-fixed_choices <- sample(rep(c("A", "B", "C"), length.out = n_rounds))
-fixed_rewards <- rbinom(n_rounds, 1, true_rates[fixed_choices])
-
-# Compute cumulative regret for both
-best_rate <- max(true_rates)
-
-ts_regret <- cumsum(best_rate - true_rates[ts_choices])
-fixed_regret <- cumsum(best_rate - true_rates[fixed_choices])
-
-# Q3: Plot cumulative regret
-regret_df <- tibble(
-  round = rep(1:n_rounds, 2),
-  regret = c(ts_regret, fixed_regret),
-  method = rep(c("Thompson Sampling", "Fixed allocation"), each = n_rounds)
+n_cities <- 12; n_t <- 24
+cohorts <- tibble(
+  city = 1:n_cities,
+  g = c(rep(8, 3), rep(12, 3), rep(16, 3), rep(Inf, 3))
 )
-
-ggplot(regret_df, aes(round, regret, color = method)) +
-  geom_line(linewidth = 1) +
-  labs(title = "Cumulative regret: bandit vs fixed allocation",
-       x = "Round", y = "Cumulative regret", color = "")
-
-# Q4: At round 2000, how much less regret does Thompson Sampling have?
-#     Why does fixed allocation regret grow linearly?
-# Your answer: _____
-
-
-# --- 2. Peeking Inflates False Positives -------------------------------------
-
-# Simulate A/A tests (NO true effect) with repeated peeking
-
-n_sims <- 2000
-n_obs <- 500
-peek_schedule <- seq(50, n_obs, by = 50)  # peek every 50 obs
-
-# Q5: Run simulation — for each A/A test, check if we EVER get p < 0.05
-peeking_results <- replicate(n_sims, {
-  x <- rnorm(n_obs, mean = 0, sd = 1)   # arm A
-  y <- rnorm(n_obs, mean = 0, sd = 1)   # arm B (same!)
-
-  # Check at each peek time
-  p_values <- sapply(peek_schedule, function(k) {
-    t.test(x[1:k], y[1:k])$p.value
-  })
-
-  # Did we EVER reject?
-  any(p_values < 0.05)
-})
-
-cat("False positive rate with peeking:", mean(peeking_results), "\n")
-
-# Q6: Compare to testing only at the end
-no_peek_results <- replicate(n_sims, {
-  x <- rnorm(n_obs)
-  y <- rnorm(n_obs)
-  t.test(x, y)$p.value < 0.05
-})
-
-cat("False positive rate without peeking:", mean(no_peek_results), "\n")
-
-# Q7: How does the false positive rate change with the number of peeks?
-peek_counts <- c(1, 2, 5, 10, 20, 50)
-
-fpr_by_peeks <- sapply(peek_counts, function(n_peeks) {
-  peek_times <- round(seq(50, n_obs, length.out = n_peeks))
-
-  mean(replicate(1000, {
-    x <- rnorm(n_obs)
-    y <- rnorm(n_obs)
-    p_vals <- sapply(peek_times, function(k) t.test(x[1:k], y[1:k])$p.value)
-    any(p_vals < 0.05)
-  }))
-})
-
-tibble(n_peeks = peek_counts, false_positive_rate = fpr_by_peeks) |>
-  ggplot(aes(n_peeks, false_positive_rate)) +
-  geom_line(linewidth = 1.2, color = "steelblue") +
-  geom_point(size = 3) +
-  geom_hline(yintercept = 0.05, linetype = "dashed", color = "firebrick") +
-  annotate("text", x = 30, y = 0.06, label = "Nominal alpha = 0.05",
-           color = "firebrick") +
-  labs(title = "More peeks = higher false positive rate",
-       x = "Number of peeks", y = "False positive rate")
-
-# Q8: Why does peeking inflate false positives? What's the intuition?
-# Your answer: _____
-
-
-# --- 3. Simple Group Sequential Boundary -------------------------------------
-
-# Implement a Pocock-like correction: use the same adjusted alpha at each look
-# so that the overall Type I error is approximately 0.05.
-
-n_looks <- 5
-# Q9: The Bonferroni correction uses alpha/n_looks at each look.
-#     This is conservative. What's the adjusted alpha?
-adjusted_alpha <- _____
-
-# Simulate: does this control the overall false positive rate?
-seq_results <- replicate(2000, {
-  x <- rnorm(n_obs)
-  y <- rnorm(n_obs)
-  look_times <- round(seq(n_obs / n_looks, n_obs, length.out = n_looks))
-
-  p_values <- sapply(look_times, function(k) t.test(x[1:k], y[1:k])$p.value)
-  any(p_values < adjusted_alpha)
-})
-
-cat("FPR with Bonferroni sequential:", mean(seq_results), "\n")
-# Q10: Is this below 0.05? Why is it conservative (below, not exactly 0.05)?
-# Your answer: _____
-
-# Now compare power: does the sequential design detect a TRUE effect?
-true_effect <- 0.2
-
-seq_power <- mean(replicate(2000, {
-  x <- rnorm(n_obs, mean = 0)
-  y <- rnorm(n_obs, mean = true_effect)
-  look_times <- round(seq(n_obs / n_looks, n_obs, length.out = n_looks))
-  p_values <- sapply(look_times, function(k) t.test(x[1:k], y[1:k])$p.value)
-  any(p_values < adjusted_alpha)
-}))
-
-fixed_power <- mean(replicate(2000, {
-  x <- rnorm(n_obs)
-  y <- rnorm(n_obs, mean = true_effect)
-  t.test(x, y)$p.value < 0.05
-}))
-
-cat("Power (sequential):", round(seq_power, 3), "\n")
-cat("Power (fixed):", round(fixed_power, 3), "\n")
-# Q11: Which has higher power? Why?
-# Your answer: _____
-
-
-# --- 4. Basic Synthetic Control -----------------------------------------------
-
-# Simulate: 1 treated city + 8 donor cities, 20 time periods, treatment at t=11
-n_cities <- 9
-n_time <- 20
-treat_time <- 11
-true_effect <- -2.0
-
-# City-specific levels and common time trend
-city_levels <- c(5, 3, 4, 6, 2, 3.5, 4.5, 5.5, 2.5)
-time_trend <- seq(0, 2, length.out = n_time)
-
-# Generate data
-synth_data <- expand_grid(city = 1:n_cities, time = 1:n_time) |>
+panel <- expand_grid(city = 1:n_cities, t = 1:n_t) |>
+  left_join(cohorts, by = "city") |>
   mutate(
-    y_clean = city_levels[city] + time_trend[time],
-    noise = rnorm(n(), 0, 0.3),
-    treatment = if_else(city == 1 & time >= treat_time, true_effect, 0),
-    y = y_clean + noise + treatment
+    treated = t >= g,
+    eff = if_else(treated,
+                  0.6 * (1 + 0.05 * (t - g)) *
+                    (1 + 0.3 * (g == 8) - 0.2 * (g == 16)),
+                  0),
+    y = 5 + 0.05 * t + city * 0.1 + eff + rnorm(n(), 0, 0.3)
   )
 
-# Q12: Construct synthetic control weights using pre-treatment data
-pre_data <- synth_data |>
-  filter(time < treat_time) |>
-  select(city, time, y) |>
-  pivot_wider(names_from = city, values_from = y)
+# True average post-treatment effect:
+true_att <- panel |> filter(t >= g, is.finite(g)) |>
+  summarise(mean(eff)) |> pull()
 
-y_treated <- pre_data$`1`
-X_donors <- as.matrix(pre_data[, paste0(2:n_cities)])
+# (a) TWFE — biased
+fit_twfe <- feols(y ~ treated | city + t, data = panel)
+twfe <- coef(fit_twfe)["treatedTRUE"]
 
-# Fit weights via OLS (simplified — real SC uses constrained optimization)
-raw_weights <- coef(lm(y_treated ~ X_donors - 1))
-raw_weights[raw_weights < 0] <- 0
-weights <- raw_weights / sum(raw_weights)
+# (b) Sun-Abraham — heterogeneity-robust
+panel_sa <- panel |> mutate(g_sa = if_else(is.infinite(g), 10000, g))
+fit_sa <- feols(y ~ sunab(g_sa, t) | city + t, data = panel_sa)
+sa_att <- summary(fit_sa, agg = "att")$coeftable["ATT", "Estimate"]
 
-cat("Synthetic control weights:\n")
-print(round(weights, 3))
+cat("Truth: ", round(true_att, 3),
+    "  TWFE: ", round(twfe, 3),
+    "  Sun-Abraham: ", round(sa_att, 3), "\n")
 
-# Q13: Compute the synthetic control outcome for all time periods
-all_wide <- synth_data |>
-  select(city, time, y) |>
-  pivot_wider(names_from = city, values_from = y)
+# (c) Hand-coded Goodman-Bacon: how negative is the worst 2x2?
+get_2x2 <- function(g_t, g_c, df, t_max) {
+  if (is.infinite(g_c)) {
+    pre <- 1:(g_t - 1); post <- g_t:t_max
+  } else if (g_c > g_t) {
+    pre <- 1:(g_t - 1); post <- g_t:(g_c - 1)
+  } else {
+    pre <- (g_c):(g_t - 1); post <- g_t:t_max
+  }
+  ya <- mean(df$y[df$g == g_t & df$t %in% pre])
+  yb <- mean(df$y[df$g == g_t & df$t %in% post])
+  yc <- mean(df$y[df$g == g_c & df$t %in% pre])
+  yd <- mean(df$y[df$g == g_c & df$t %in% post])
+  (yb - ya) - (yd - yc)
+}
+expand_grid(g_t = c(8, 12, 16), g_c = c(8, 12, 16, Inf)) |>
+  filter(g_t != g_c) |>
+  rowwise() |>
+  mutate(est = get_2x2(g_t, g_c, panel, n_t),
+         kind = if (is.infinite(g_c)) "treated vs never"
+                else if (g_c > g_t)   "earlier vs later"
+                else                   "later vs earlier (PROBLEM)") |>
+  ungroup() |>
+  arrange(kind, est) |> print(n = 100)
 
-synth_outcome <- as.matrix(all_wide[, paste0(2:n_cities)]) %*% _____
+# >>> What's the smallest ("most negative") 2x2 estimate, and which pair?
+# Hint: it should be a "later vs earlier" pair, where the early cohort's
+# already-treated post-period acts as the control.
 
-# Q14: Estimate the treatment effect (gap between treated and synthetic)
-gap <- all_wide$`1` - as.numeric(synth_outcome)
-post_gap <- mean(gap[treat_time:n_time])
-cat("Estimated effect:", round(post_gap, 2), "\n")
-cat("True effect:", true_effect, "\n")
 
-# Q15: Plot treated vs synthetic control
-plot_df <- tibble(
-  time = rep(1:n_time, 2),
-  y = c(all_wide$`1`, as.numeric(synth_outcome)),
-  series = rep(c("Treated", "Synthetic control"), each = n_time)
+# ===== Q2. Synthetic Control by Hand, Then SDID =====
+#
+# Single treated unit. Build SC weights via simplex-constrained least squares
+# (NNLS + sum-to-one). Then compare the SC gap to a hand-rolled SDID with
+# weighted-DiD style.
+
+# DGP: 9 donor cities + 1 treated, 30 periods, treatment at t=21.
+n_donor <- 9; n_T <- 30; t_treat <- 21
+donors <- matrix(NA, n_T, n_donor)
+true_w <- c(0.35, 0.25, 0.15, 0.10, 0.10, 0.05, 0, 0, 0)
+for (j in 1:n_donor) {
+  donors[, j] <- 5 + 0.04 * (1:n_T) + 0.5 * sin((1:n_T) / 5 + j) +
+                 j * 0.15 + rnorm(n_T, 0, 0.2)
+}
+treated_y <- as.numeric(donors %*% true_w) + rnorm(n_T, 0, 0.15)
+treat_effect <- -0.8
+treated_y[t_treat:n_T] <- treated_y[t_treat:n_T] + treat_effect
+
+# (a) Synthetic control via solve.QP — minimize pre-period squared error
+#     subject to w_j >= 0 and sum w = 1.
+pre <- 1:(t_treat - 1)
+A <- donors[pre, ]; b <- treated_y[pre]
+Dmat <- 2 * t(A) %*% A
+dvec <- 2 * t(A) %*% b
+Amat <- cbind(rep(1, n_donor), diag(n_donor))   # sum=1, w >= 0
+bvec <- c(1, rep(0, n_donor))
+w_sc <- solve.QP(Dmat, dvec, Amat, bvec, meq = 1)$solution
+synth_y <- as.numeric(donors %*% w_sc)
+gap_sc  <- treated_y - synth_y
+
+cat("\nSC weights (truth | est):\n")
+print(round(rbind(true_w, w_sc), 3))
+cat("Mean post-period SC gap:", round(mean(gap_sc[t_treat:n_T]), 3),
+    "  (truth =", treat_effect, ")\n")
+
+# (b) Synthetic DiD (simplified): SC unit-weights * uniform time-weights
+#     and a weighted DiD. Real SDID adds an L2 penalty on the weights and
+#     fits time-weights from a separate regression — see synthdid pkg.
+
+# Stack the data, build the weighted DiD by hand.
+panel_sdid <- bind_rows(
+  tibble(unit = 0, t = 1:n_T, y = treated_y, treated_unit = TRUE),
+  expand_grid(unit = 1:n_donor, t = 1:n_T) |>
+    mutate(y = donors[cbind(t, unit)], treated_unit = FALSE)
+) |>
+  mutate(post = t >= t_treat,
+         D = treated_unit & post,
+         w = if_else(treated_unit, 1, w_sc[unit]))
+fit_sdid <- lm(y ~ D + factor(unit) + factor(t), data = panel_sdid,
+               weights = w)
+cat("Hand-rolled SDID estimate:",
+    round(coef(fit_sdid)["DTRUE"], 3), "\n")
+
+# >>> Which estimator is closer to the truth?
+# >>> Try varying the DGP noise (rnorm sd). Where does each break?
+
+
+# ===== Q3. Causal Forest — Recover the True HTE =====
+#
+# The zone-notification HTE depends on driver tenure and city density.
+# Truth: tau(x) = 30 + 60*density - 10*min(tenure, 4)
+
+n <- 4000
+X <- tibble(
+  tenure  = rexp(n, rate = 1/2),
+  density = runif(n, 0, 1),
+  age     = sample(20:65, n, replace = TRUE)
 )
+W <- rbinom(n, 1, 0.5)
+true_tau <- 30 + 60 * X$density - 10 * pmin(X$tenure, 4)
+Y <- 700 + 50 * X$age * 0.5 + true_tau * W + rnorm(n, 0, 80)
 
-ggplot(plot_df, aes(time, y, color = series)) +
-  geom_line(linewidth = 1.2) +
-  geom_vline(xintercept = treat_time - 0.5, linetype = "dashed") +
-  labs(title = "Synthetic Control: treated city vs constructed counterfactual",
-       x = "Time", y = "Outcome", color = "")
+# (a) Fit a causal forest.
+cf <- causal_forest(X = as.matrix(X), Y = Y, W = W, num.trees = 1000)
 
-# Q16: How well does the synthetic control fit in the pre-treatment period?
-#      What would a poor pre-treatment fit tell you about the estimate?
-# Your answer: _____
+# (b) ATE — sanity check.
+print(average_treatment_effect(cf))
+cat("True ATE:", round(mean(true_tau), 2), "\n")
+
+# (c) Predict tau-hat and check correlation with truth.
+tau_hat <- predict(cf)$predictions
+cat("cor(tau_hat, true_tau):", round(cor(tau_hat, true_tau), 3), "\n")
+
+# (d) Variable importance — which X drove the splits?
+print(variable_importance(cf))
+
+# (e) Plot tau_hat vs density, colored by tenure.
+ggplot(bind_cols(X, hat = tau_hat, true = true_tau),
+       aes(density, hat, color = pmin(tenure, 5))) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(aes(y = true), color = "black", linetype = "dashed", se = FALSE) +
+  scale_color_viridis_c(name = "Tenure (yrs)") +
+  labs(x = "City density", y = expression(hat(tau)(x)))
+
+# >>> Variable importance — is `age` correctly identified as irrelevant?
+# >>> Try a smaller n (e.g., 800). Does the forest still recover the HTE?
 
 
-# --- 5. Bonus: Bandit Inference Problem --------------------------------------
-
-# Q17: Run an A/B test AND a Thompson Sampling bandit on the SAME problem
-#      (true_rates from section 1). Compute the estimated treatment effect
-#      (B - A) under both designs. Which gives a more accurate estimate?
-
-# Fixed A/B
-n_ab <- 2000
-ab_a <- rbinom(n_ab / 2, 1, true_rates["A"])
-ab_b <- rbinom(n_ab / 2, 1, true_rates["B"])
-ab_estimate <- mean(ab_b) - mean(ab_a)
-
-# Bandit estimate (using data from section 1)
-bandit_a_rewards <- ts_rewards[ts_choices == "A"]
-bandit_b_rewards <- ts_rewards[ts_choices == "B"]
-bandit_estimate <- mean(bandit_b_rewards) - mean(bandit_a_rewards)
-
-cat("True B - A:", true_rates["B"] - true_rates["A"], "\n")
-cat("A/B estimate:", round(ab_estimate, 4), "\n")
-cat("Bandit estimate:", round(bandit_estimate, 4), "\n")
-
-# Q18: Why is the bandit estimate potentially biased? Think about which
-#      observations of arm A are collected early vs late in the experiment.
-# Your answer: _____
+# ===== End =====

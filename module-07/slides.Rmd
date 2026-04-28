@@ -81,7 +81,7 @@ cities_df <- tibble(
 <tr><td>5</td><td><a href="../module-05/slides.html">Analyzing Experiments</a></td><td>✓ done</td></tr>
 <tr><td>6</td><td>Multiple Testing & Subgroups</td><td>done</td></tr>
 <tr><td><b>7</b></td><td><b>External Validity & Generalizability</b> <i>(you are here)</i></td><td>current</td></tr>
-<tr><td>8</td><td>Advanced Topics</td><td>upcoming</td></tr>
+<tr><td>8</td><td><a href="../module-08/slides.html">Beyond the A/B Test</a></td><td>✓ done</td></tr>
 </table>
 
 ---

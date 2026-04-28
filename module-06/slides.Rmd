@@ -52,7 +52,7 @@ set.seed(42)
 <tr><td>5</td><td><a href="../module-05/slides.html">Analyzing Experiments</a></td><td>✓ done</td></tr>
 <tr><td><b>6</b></td><td><b>Multiple Testing & Subgroups</b> <i>(you are here)</i></td><td>current</td></tr>
 <tr><td>7</td><td><a href="../module-07/slides.html">External Validity</a></td><td>✓ done</td></tr>
-<tr><td>8</td><td>Advanced Topics</td><td>upcoming</td></tr>
+<tr><td>8</td><td><a href="../module-08/slides.html">Beyond the A/B Test</a></td><td>✓ done</td></tr>
 </table>
 
 ---

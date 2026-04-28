@@ -1,6 +1,6 @@
 ---
-title: "Module 8: Advanced Topics for Tech Interviews"
-subtitle: "Synthetic Control, Sequential Testing, Bandits, and DiD"
+title: "Module 8: Beyond the A/B Test"
+subtitle: "Modern DiD, Synthetic Control, and Causal Forests"
 output:
   xaringan::moon_reader:
     css: [default, default-fonts]
@@ -28,6 +28,43 @@ output:
   padding: 0.5em 1em;
   margin: 0.5em 0;
 }
+.nav-btn {
+  position: absolute;
+  bottom: 12px;
+  left: 40px;
+  font-size: 11px;
+  background: #e8eaf6;
+  padding: 2px 8px;
+  border-radius: 3px;
+  z-index: 100;
+  text-decoration: none;
+  color: #1a237e;
+}
+.nav-btn:hover { background: #c5cae9; }
+.nav-btn-br {
+  position: absolute;
+  bottom: 12px;
+  right: 70px;
+  font-size: 11px;
+  background: #e8eaf6;
+  padding: 2px 8px;
+  border-radius: 3px;
+  z-index: 100;
+  text-decoration: none;
+  color: #1a237e;
+}
+.nav-btn-br:hover { background: #c5cae9; }
+.inline-btn {
+  font-size: 11px;
+  background: #e8eaf6;
+  padding: 2px 8px;
+  border-radius: 3px;
+  text-decoration: none;
+  color: #1a237e;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.inline-btn:hover { background: #c5cae9; }
 ```
 
 ```{r setup, include=FALSE}
@@ -37,6 +74,7 @@ knitr::opts_chunk$set(
   message = FALSE, warning = FALSE
 )
 library(tidyverse)
+library(fixest)
 theme_set(theme_minimal(base_size = 14))
 set.seed(42)
 ```
@@ -48,819 +86,870 @@ set.seed(42)
 <tr><td>1</td><td><a href="../module-01/slides.html">The Experimental Ideal</a></td><td>✓ done</td></tr>
 <tr><td>2</td><td><a href="../module-02/slides.html">SUTVA and When It Breaks</a></td><td>✓ done</td></tr>
 <tr><td>3</td><td><a href="../module-03/slides.html">Designing Around Interference</a></td><td>✓ done</td></tr>
-<tr><td>4</td><td>Power and Sample Size</td><td>done</td></tr>
+<tr><td>4</td><td>Power and Sample Size</td><td>upcoming</td></tr>
 <tr><td>5</td><td><a href="../module-05/slides.html">Analyzing Experiments</a></td><td>✓ done</td></tr>
-<tr><td>6</td><td>Multiple Testing & Subgroups</td><td>done</td></tr>
+<tr><td>6</td><td>Multiple Testing & Subgroups</td><td>upcoming</td></tr>
 <tr><td>7</td><td><a href="../module-07/slides.html">External Validity</a></td><td>✓ done</td></tr>
-<tr><td><b>8</b></td><td><b>Advanced Topics for Tech Interviews</b> <i>(you are here)</i></td><td>current</td></tr>
+<tr><td><b>8</b></td><td><b>Beyond the A/B Test</b> <i>(you are here)</i></td><td>current</td></tr>
 </table>
 
 ---
 
-# When You Can't Randomize: One Treated City
+# When Randomization Isn't Enough
 
-A ride-sharing company rolls out a new regulatory policy in **one** city. No control group, no randomization. How do you estimate the effect?
-
---
-
-```{r synth-data, echo=FALSE, fig.height=3.8}
-# Simulate 10 cities, 20 time periods, treatment at t=11 for city 1
-n_cities <- 10
-n_time <- 20
-treat_time <- 11
-
-city_fe <- c(5, 3, 4, 6, 2, 3.5, 4.5, 5.5, 2.5, 3.8)
-time_trend <- seq(0, 2, length.out = n_time)
-synth_df <- expand_grid(city = 1:n_cities, time = 1:n_time) |>
-  mutate(
-    y_base = city_fe[city] + time_trend[time] + rnorm(n(), 0, 0.3),
-    treated = (city == 1 & time >= treat_time),
-    effect = if_else(treated, -1.5, 0),
-    y = y_base + effect,
-    city_label = if_else(city == 1, "Treated city", "Donor pool"),
-    city_f = factor(city)
-  )
-
-ggplot(synth_df, aes(time, y, group = city_f, color = city_label)) +
-  geom_line(alpha = 0.7, linewidth = 0.8) +
-  geom_vline(xintercept = treat_time - 0.5, linetype = "dashed") +
-  annotate("text", x = treat_time - 0.3, y = 8.5, label = "Policy change",
-           hjust = 1, size = 4) +
-  scale_color_manual(values = c("grey60", "firebrick")) +
-  labs(title = "One treated city, nine potential controls",
-       x = "Time", y = "Outcome (e.g., rides per capita)", color = "")
-```
-
---
-
-No single donor city is a good control. But a **weighted combination** might be.
-
----
-
-# Synthetic Control: Building a Counterfactual
-
-The idea: find weights $w_j \geq 0$, $\sum w_j = 1$ so the weighted donor pool matches the treated city pre-treatment.
-
-```{r synth-weights, echo=FALSE}
-# Simple synthetic control via pre-treatment OLS
-pre_data <- synth_df |> filter(time < treat_time)
-pre_wide <- pre_data |>
-  select(city, time, y) |>
-  pivot_wider(names_from = city, values_from = y)
-
-# Target: city 1. Donors: cities 2-10. Constrained regression (simplified)
-y_target <- pre_wide$`1`
-X_donors <- as.matrix(pre_wide[, 3:11])
-
-# Non-negative least squares (simple projection + clamp)
-raw_w <- coef(lm(y_target ~ X_donors - 1))
-raw_w[is.na(raw_w) | raw_w < 0] <- 0
-weights <- raw_w / sum(raw_w)
-
-donor_names <- paste0("City ", 2:10)
-keep <- weights > 0.01
-w_df <- tibble(City = donor_names[keep],
-               Weight = round(weights[keep], 3))
-knitr::kable(w_df, caption = "Synthetic control weights (cities with w > 0.01)")
-```
-
---
-
-```{r synth-result, echo=FALSE, fig.height=3}
-# Construct synthetic control outcome
-post_wide <- synth_df |>
-  select(city, time, y) |>
-  pivot_wider(names_from = city, values_from = y)
-
-synth_y <- as.matrix(post_wide[, 3:11]) %*% weights
-
-sc_plot_df <- tibble(
-  time = 1:n_time,
-  Treated = post_wide$`1`,
-  `Synthetic control` = as.numeric(synth_y)
-) |> pivot_longer(-time, names_to = "Series", values_to = "y")
-
-ggplot(sc_plot_df, aes(time, y, color = Series)) +
-  geom_line(linewidth = 1.2) +
-  geom_vline(xintercept = treat_time - 0.5, linetype = "dashed") +
-  scale_color_manual(values = c("steelblue", "firebrick")) +
-  labs(title = "Synthetic control tracks pre-treatment, reveals post-treatment gap",
-       x = "Time", y = "Outcome", color = "")
-```
-
-The gap after treatment = estimated causal effect.
-
----
-
-# Synthetic Control: Key Points
-
-.pull-left[
-**When to use it:**
-- Only one (or very few) treated units
-- Good donor pool of untreated units
-- Long pre-treatment period available
-
-**Strengths:**
-- Transparent: you see the weights
-- Pre-treatment fit validates the approach
-- No parallel trends assumption needed
-]
-
-.pull-right[
-**Limitations:**
-- Inference is hard (permutation-based)
-- Requires good pre-treatment fit
-- Sensitive to donor pool selection
-
-**Interview tip:**
-"How would you measure the effect of a policy change in one city?"
-$\rightarrow$ Synthetic control is the go-to answer when the unit count is too small for DiD.
-]
-
-.highlight-box[
-**Key insight:** Synthetic control constructs the counterfactual *from data*, rather than assuming parallel trends with any single comparison unit.
-]
-
----
-
-# Regression Discontinuity: Local Randomization
-
-A ride-sharing platform enables the **zone-notification** feature only for drivers with 100+ completed trips this month. Drivers at 99 vs 101 trips are essentially identical — but only those above the cutoff get notifications.
-
-```{r rd-sim, echo=FALSE, fig.height=3.8}
-n_rd <- 800
-rd_df <- tibble(
-  trips = runif(n_rd, 60, 140),
-  above = trips >= 100,
-  # True effect = 5 more rides next month for those above cutoff
-  y = 40 + 0.3 * (trips - 100) + 5 * above + rnorm(n_rd, 0, 4)
-)
-
-ggplot(rd_df, aes(trips, y, color = above)) +
-  geom_point(alpha = 0.3, size = 1.5) +
-  geom_smooth(method = "lm", se = FALSE, linewidth = 1.2) +
-  geom_vline(xintercept = 100, linetype = "dashed") +
-  scale_color_manual(values = c("grey50", "steelblue"),
-                     labels = c("Below cutoff", "Above cutoff")) +
-  labs(title = "Regression Discontinuity: jump at the cutoff = causal effect",
-       x = "Trips this month (running variable)",
-       y = "Rides next month", color = "") +
-  theme(legend.position = "top")
-```
-
---
-
-.highlight-box[
-**RD intuition:** near the cutoff, treatment is "as good as random." The jump in the outcome at the threshold estimates a **local** causal effect (LATE at the cutoff).
-]
-
----
-
-# RD: Sharp vs Fuzzy
-
-.pull-left[
-**Sharp RD:** treatment is a deterministic function of the running variable.
-
-$D_i = \mathbf{1}[X_i \geq c]$
-
-Everyone above the cutoff is treated, everyone below is not.
-
-Estimate: local regression on each side, take the difference at $c$.
-]
-
-.pull-right[
-**Fuzzy RD:** crossing the cutoff changes the *probability* of treatment, but compliance is imperfect.
-
-$P(D_i = 1 \mid X_i \geq c) > P(D_i = 1 \mid X_i < c)$
-
-Use the cutoff as an **instrument** for treatment.
-
-Estimate: ratio of outcome jump to treatment jump (Wald/IV).
-]
-
---
+Three settings where the clean experiment from M1–M5 isn't available:
 
 .blue-box[
-**Bandwidth choice matters:** too narrow = noisy; too wide = bias from functional form. Use data-driven methods (Imbens-Kalyanaraman, Calonico-Cattaneo-Titiunik). In interviews, mention the tradeoff.
+**1. Staggered rollouts** — Treatment turns on city-by-city over months. There's no clean "post" period that's the same for everyone. Naive two-way fixed effects (TWFE) is **biased** when effects are heterogeneous over time.
+
+**2. One treated unit** — A policy hits a single city. No control group to randomize against. *Synthetic control* builds a counterfactual from a weighted donor pool.
+
+**3. Heterogeneity that matters for policy** — Knowing the average effect isn't enough; you need to know *who responds*. *Causal forests* estimate treatment effects as a function of covariates.
 ]
-
----
-
-# Difference-in-Differences: The Parallel Trends Bet
-
-Two groups of cities. One group gets a new feature at $t = 5$. The identifying assumption: **absent treatment, both groups would have trended the same way.**
-
-```{r did-sim, echo=FALSE, fig.height=3.8}
-n_cities_did <- 20
-n_time_did <- 10
-treat_time_did <- 5
-
-did_df <- expand_grid(city = 1:n_cities_did, time = 1:n_time_did) |>
-  mutate(
-    treated_group = city <= 10,
-    post = time > treat_time_did,
-    city_fe = if_else(treated_group, 2, 0),
-    # Parallel trends hold
-    y = 10 + city_fe + 0.5 * time + 3 * (treated_group & post) + rnorm(n(), 0, 1),
-    Group = if_else(treated_group, "Treatment cities", "Control cities")
-  )
-
-did_means <- did_df |>
-  group_by(Group, time) |>
-  summarise(y = mean(y), .groups = "drop")
-
-ggplot(did_means, aes(time, y, color = Group)) +
-  geom_line(linewidth = 1.2) +
-  geom_point(size = 2.5) +
-  geom_vline(xintercept = treat_time_did + 0.5, linetype = "dashed") +
-  scale_color_manual(values = c("grey50", "steelblue")) +
-  labs(title = "DiD: parallel pre-trends, then divergence = treatment effect",
-       x = "Time", y = "Mean outcome", color = "")
-```
 
 --
 
-The DiD estimate: $\hat{\tau} = (\bar{Y}_{T,post} - \bar{Y}_{T,pre}) - (\bar{Y}_{C,post} - \bar{Y}_{C,pre})$
+This module: the modern toolkit for each, with proofs and DGP code in backup slides.
 
 ---
 
-# DiD: What If Parallel Trends Fail?
+class: center, middle, inverse
 
-```{r did-violated, echo=FALSE, fig.height=3.8}
-did_bad <- expand_grid(city = 1:n_cities_did, time = 1:n_time_did) |>
-  mutate(
-    treated_group = city <= 10,
-    post = time > treat_time_did,
-    city_fe = if_else(treated_group, 2, 0),
-    # Non-parallel trends: treatment group was already accelerating
-    trend = if_else(treated_group, 0.5 + 0.08 * time, 0.5),
-    y = 10 + city_fe + trend * time + 1.5 * (treated_group & post) +
-      rnorm(n(), 0, 1),
-    Group = if_else(treated_group, "Treatment cities", "Control cities")
-  )
+# Part 1 — Modern Difference-in-Differences
 
-did_bad_means <- did_bad |>
-  group_by(Group, time) |>
-  summarise(y = mean(y), .groups = "drop")
+---
 
-ggplot(did_bad_means, aes(time, y, color = Group)) +
-  geom_line(linewidth = 1.2) +
-  geom_point(size = 2.5) +
-  geom_vline(xintercept = treat_time_did + 0.5, linetype = "dashed") +
+# Classic 2×2 DiD: Two Groups, Two Periods
+
+One city gets the zone-notification feature at $t=2$; one doesn't. Driver weekly earnings before and after:
+
+```{r did-22-data, echo=FALSE, fig.height=3}
+did22 <- tibble(
+  city = rep(c("Treated", "Control"), each = 2),
+  period = rep(c("Pre", "Post"), 2),
+  t = rep(c(1, 2), 2),
+  y = c(800, 870, 780, 800)
+)
+ggplot(did22, aes(t, y, color = city)) +
+  geom_line(linewidth = 1.2) + geom_point(size = 4) +
+  geom_segment(aes(x = 2.05, xend = 2.05, y = 800, yend = 870),
+               color = "black", linewidth = 0.4,
+               arrow = arrow(ends = "both", length = unit(0.1, "in"))) +
+  geom_segment(aes(x = 2.1, xend = 2.1, y = 800, yend = 820),
+               color = "black", linewidth = 0.4, linetype = "dotted") +
+  annotate("text", x = 2.15, y = 845, label = "Total\nchange = $70", hjust = 0, size = 3.5) +
+  annotate("text", x = 2.15, y = 810, label = "Counterfactual\ntrend = $20", hjust = 0, size = 3.5) +
+  scale_x_continuous(breaks = 1:2, labels = c("Pre", "Post")) +
   scale_color_manual(values = c("grey50", "firebrick")) +
-  annotate("text", x = 3, y = 18, label = "Pre-trends diverge!",
-           color = "firebrick", size = 5) +
-  labs(title = "Violation: treatment group was already trending differently",
-       subtitle = "DiD overestimates the effect when treated group was accelerating",
-       x = "Time", y = "Mean outcome", color = "")
+  labs(x = NULL, y = "Weekly earnings ($)", color = NULL) +
+  xlim(1, 2.7)
+```
+
+$$\widehat{\text{ATT}} = (\bar y_{T,\text{post}} - \bar y_{T,\text{pre}}) - (\bar y_{C,\text{post}} - \bar y_{C,\text{pre}}) = 70 - 20 = 50$$
+
+---
+name: parallel-trends-main
+
+# Parallel Trends — The Identifying Assumption
+
+The DiD estimator equals the ATT *only if* the treated and control groups would have followed the same trend, on average, in the absence of treatment.
+
+.highlight-box[
+**Parallel trends:** $\;\;E[Y_t(0) - Y_{t-1}(0) \mid \text{treated}] = E[Y_t(0) - Y_{t-1}(0) \mid \text{control}]$
+
+It's an assumption about *counterfactuals* — fundamentally untestable. We can only test pretrends as a proxy.
+]
+
+--
+
+**The pretrend test:** check whether the two groups moved in parallel *before* treatment. Failing this is bad news. **Passing it is weaker evidence than people think** — Roth (2022) shows pretrend tests have low power against the most-worrying violations.
+
+<a href="#pretrend-power-detail" class="nav-btn">Roth pretrend critique</a>
+
+---
+
+# Staggered Adoption — What Changes
+
+Real rollouts don't happen all at once. Cities adopt zone-notification at different times.
+
+```{r staggered-dgp, echo=FALSE, fig.height=3.6}
+n_cities <- 12; n_t <- 24
+cohorts <- tibble(
+  city = 1:n_cities,
+  g = c(rep(8, 3), rep(12, 3), rep(16, 3), rep(Inf, 3))
+)
+panel <- expand_grid(city = 1:n_cities, t = 1:n_t) |>
+  left_join(cohorts, by = "city") |>
+  mutate(
+    treated = t >= g,
+    cohort = case_when(g == 8 ~ "Early (g=8)", g == 12 ~ "Mid (g=12)",
+                       g == 16 ~ "Late (g=16)", TRUE ~ "Never"),
+    # heterogeneous, time-varying effect: bigger for earlier cohorts
+    eff = if_else(treated, 0.6 * (1 + 0.05 * (t - g)) *
+                            (1 + 0.3 * (g == 8) - 0.2 * (g == 16)), 0),
+    y = 5 + 0.05 * t + city * 0.1 + eff + rnorm(n(), 0, 0.3)
+  )
+ggplot(panel, aes(t, y, group = city, color = cohort)) +
+  geom_line(alpha = 0.6) +
+  geom_vline(data = distinct(panel, cohort, g) |> filter(is.finite(g)),
+             aes(xintercept = g, color = cohort), linetype = "dashed", alpha = 0.7) +
+  scale_color_manual(values = c("Early (g=8)" = "#e41a1c", "Mid (g=12)" = "#ff7f00",
+                                 "Late (g=16)" = "#4daf4a", "Never" = "grey60")) +
+  labs(x = "Period", y = "Outcome", color = "Adoption cohort")
+```
+
+Three cohorts adopt at $t=8, 12, 16$; three never adopt. The effect grows over time and is **larger for earlier-adopting cohorts**.
+
+<a href="#staggered-dgp-detail" class="nav-btn">DGP code</a>
+
+---
+
+# The TWFE Estimator — Looks Innocent, Isn't
+
+The "default" DiD with staggered timing:
+
+$$Y_{it} = \alpha_i + \lambda_t + \beta\, D_{it} + \varepsilon_{it}$$
+
+```{r twfe-fit}
+fit_twfe <- feols(y ~ treated | city + t, data = panel)
+coef(fit_twfe)["treatedTRUE"]
 ```
 
 --
 
-.highlight-box[
-**How to test:** Plot pre-treatment trends. Run event-study regressions (leads should be zero). If pre-trends diverge, DiD is biased --- consider synthetic control or other methods.
-]
+The true effects are positive and grow over time. The TWFE coefficient is wrong (sometimes the *wrong sign*) when:
 
----
-
-# Bandits: Explore vs Exploit
-
-Standard A/B test: fixed allocation (50/50), wait for statistical significance, then decide. What if you could **shift traffic toward the winner** during the experiment?
+- effects are heterogeneous *across cohorts*, or
+- effects grow/shrink *within a cohort over time*.
 
 --
 
-```{r bandit-intro, echo=FALSE, fig.height=3.5}
-# Thompson Sampling bandit vs fixed A/B
-n_rounds <- 1000
-true_p <- c(A = 0.10, B = 0.13)  # B is better
+**Goodman-Bacon (2021):** $\hat\beta_{\text{TWFE}}$ is a weighted average of all possible 2×2 DiDs in the data. Some of those weights are **negative** — earlier-treated units act as "controls" for later-treated ones, which subtracts a treated trend.
 
-# Fixed A/B
-set.seed(42)
-fixed_choices <- rep(c("A", "B"), each = n_rounds / 2) |> sample()
-fixed_rewards <- rbinom(n_rounds, 1, true_p[fixed_choices])
-fixed_cumrew <- cumsum(fixed_rewards)
+<a href="#goodman-bacon-derivation" class="nav-btn">decomposition</a>
 
-# Thompson Sampling
-ts_alpha <- c(A = 1, B = 1)
-ts_beta <- c(A = 1, B = 1)
-ts_rewards <- numeric(n_rounds)
-ts_choices <- character(n_rounds)
+---
 
-for (i in 1:n_rounds) {
-  theta <- c(rbeta(1, ts_alpha["A"], ts_beta["A"]),
-             rbeta(1, ts_alpha["B"], ts_beta["B"]))
-  choice <- c("A", "B")[which.max(theta)]
-  reward <- rbinom(1, 1, true_p[choice])
-  ts_alpha[choice] <- ts_alpha[choice] + reward
-  ts_beta[choice] <- ts_beta[choice] + (1 - reward)
-  ts_choices[i] <- choice
-  ts_rewards[i] <- reward
+# Visualizing the Bacon Decomposition
+
+```{r bacon-viz, echo=FALSE, fig.height=4}
+# Hand-computed Bacon decomposition for our 4-cohort DGP
+panel_long <- panel |> mutate(D = as.integer(treated))
+# 2x2 DiDs: (treated cohort, control cohort, weight, estimate)
+get_2x2 <- function(g_t, g_c, df, t_max) {
+  if (is.infinite(g_c)) {
+    pre <- 1:(g_t - 1); post <- g_t:t_max
+  } else if (g_c > g_t) {
+    pre <- 1:(g_t - 1); post <- g_t:(g_c - 1)
+  } else {
+    pre <- (g_c):(g_t - 1); post <- g_t:t_max
+  }
+  treated_pre  <- mean(df$y[df$g == g_t & df$t %in% pre])
+  treated_post <- mean(df$y[df$g == g_t & df$t %in% post])
+  control_pre  <- mean(df$y[df$g == g_c & df$t %in% pre])
+  control_post <- mean(df$y[df$g == g_c & df$t %in% post])
+  (treated_post - treated_pre) - (control_post - control_pre)
 }
-
-ts_cumrew <- cumsum(ts_rewards)
-
-bandit_plot <- tibble(
-  round = rep(1:n_rounds, 2),
-  cumulative_reward = c(fixed_cumrew, ts_cumrew),
-  Method = rep(c("Fixed A/B (50/50)", "Thompson Sampling"), each = n_rounds)
-)
-
-ggplot(bandit_plot, aes(round, cumulative_reward, color = Method)) +
-  geom_line(linewidth = 1) +
-  scale_color_manual(values = c("grey50", "steelblue")) +
-  labs(title = "Bandit earns more total reward by shifting to the winner",
-       x = "Round", y = "Cumulative conversions", color = "") +
-  theme(legend.position = "top")
+bacon <- expand_grid(g_t = c(8, 12, 16), g_c = c(8, 12, 16, Inf)) |>
+  filter(g_t != g_c) |>
+  rowwise() |>
+  mutate(est = get_2x2(g_t, g_c, panel_long, n_t)) |>
+  ungroup() |>
+  mutate(comparison = case_when(
+    is.infinite(g_c) ~ "Treated vs Never",
+    g_c > g_t ~ "Earlier vs Later (later as control: clean)",
+    TRUE ~ "Later vs Earlier (earlier as control: PROBLEM)"
+  ))
+ggplot(bacon, aes(paste0("g=", g_t, " vs g=", ifelse(is.infinite(g_c), "∞", g_c)),
+                  est, fill = comparison)) +
+  geom_col() + coord_flip() +
+  geom_hline(yintercept = 0) +
+  scale_fill_manual(values = c("Treated vs Never" = "#4daf4a",
+                                "Earlier vs Later (later as control: clean)" = "#377eb8",
+                                "Later vs Earlier (earlier as control: PROBLEM)" = "#e41a1c")) +
+  labs(x = NULL, y = "2×2 DiD estimate", fill = NULL) +
+  theme(legend.position = "bottom", legend.text = element_text(size = 8))
 ```
 
---
-
-Thompson Sampling: sample from posterior of each arm's conversion rate. Pick the arm with the highest draw.
+Red bars: when an *already-treated* cohort serves as the comparison, you difference out a treated trend. TWFE puts weight on these.
 
 ---
 
-# Bandits: The Trade-off
+# The Modern Toolkit: One Slide
 
-.pull-left[
-**Bandits win at:**
-- Minimizing opportunity cost (regret) during the experiment
-- Continuous optimization (no fixed end date)
-- Personalization (contextual bandits)
-]
-
-.pull-right[
-**Bandits lose at:**
-- **Statistical inference**: non-uniform allocation biases standard estimators
-- Estimating the treatment effect precisely
-- Regulatory / pre-registration contexts
-]
-
---
-
-```{r bandit-allocation, echo=FALSE, fig.height=2.8}
-ts_frac_b <- cumsum(ts_choices == "B") / 1:n_rounds
-
-ggplot(tibble(round = 1:n_rounds, frac_B = ts_frac_b), aes(round, frac_B)) +
-  geom_line(color = "steelblue", linewidth = 0.8) +
-  geom_hline(yintercept = 0.5, linetype = "dashed", color = "grey50") +
-  labs(title = "Thompson Sampling shifts traffic toward B over time",
-       x = "Round", y = "Fraction allocated to B") +
-  ylim(0, 1)
-```
-
-.highlight-box[
-**Interview answer:** "Bandits optimize *reward*, A/B tests optimize *learning*. Use bandits when the cost of suboptimal allocation is high and you don't need a precise effect estimate. Use A/B tests when you need to *measure* the effect."
-]
-
----
-
-# Sequential Testing: The Peeking Problem
-
-You run an A/B test. After each day, you check: "is it significant yet?" This is **peeking**, and it inflates your false positive rate.
-
---
-
-```{r peeking-sim, echo=FALSE, fig.height=3.5}
-# Simulate A/A test (no true effect) with repeated peeking
-n_sims <- 5000
-n_obs <- 1000
-peek_times <- seq(50, n_obs, by = 50)  # peek every 50 observations
-
-set.seed(42)
-ever_significant <- replicate(n_sims, {
-  x <- rnorm(n_obs)  # A arm
-  y <- rnorm(n_obs)  # B arm (same distribution = no effect)
-  any(sapply(peek_times, function(k) {
-    t.test(x[1:k], y[1:k])$p.value < 0.05
-  }))
-})
-
-no_peek_sig <- replicate(n_sims, {
-  x <- rnorm(n_obs)
-  y <- rnorm(n_obs)
-  t.test(x, y)$p.value < 0.05
-})
-
-tibble(
-  Method = c("Fixed sample (test once)", "Peek every 50 obs"),
-  `False positive rate` = c(mean(no_peek_sig), mean(ever_significant))
-) |> knitr::kable(digits = 3)
-```
-
---
-
-.highlight-box[
-Peeking at 20 time points inflates the false positive rate from 5% to >25%. The more you peek, the worse it gets. This is **not** a minor technicality --- it's the most common mistake in industry A/B testing.
-]
-
----
-
-# Sequential Testing: The Fix
-
-**Group sequential designs** (Pocock, O'Brien-Fleming) adjust the significance threshold at each interim look so the *overall* Type I error stays at $\alpha$.
-
-```{r seq-boundaries, echo=FALSE, fig.height=3.8}
-# O'Brien-Fleming-like spending function (simplified)
-n_looks <- 5
-info_frac <- (1:n_looks) / n_looks
-# Approximate OBF boundaries
-obf_z <- qnorm(1 - 0.025 / sqrt(info_frac))
-pocock_z <- rep(qnorm(1 - 0.025 / 1.5), n_looks)  # approximate
-
-bounds_df <- tibble(
-  Look = rep(1:n_looks, 2),
-  info = rep(info_frac, 2),
-  z_boundary = c(obf_z, pocock_z),
-  Method = rep(c("O'Brien-Fleming", "Pocock"), each = n_looks)
-)
-
-ggplot(bounds_df, aes(Look, z_boundary, color = Method)) +
-  geom_line(linewidth = 1.2) +
-  geom_point(size = 3) +
-  geom_hline(yintercept = 1.96, linetype = "dashed", color = "grey50") +
-  annotate("text", x = 1.5, y = 2.05, label = "Fixed z = 1.96", color = "grey50") +
-  scale_color_manual(values = c("steelblue", "firebrick")) +
-  labs(title = "Sequential boundaries: harder to reject early, easier late",
-       x = "Interim look", y = "z-boundary for rejection") +
-  theme(legend.position = "top")
-```
-
---
-
-.blue-box[
-**O'Brien-Fleming:** very conservative early (hard to stop), nearly standard at the end. **Pocock:** equal boundary at each look, but final-look threshold is stricter than 1.96. Both control overall $\alpha = 0.05$.
-]
-
----
-
-# Always-Valid Inference: Confidence Sequences
-
-Modern approach: instead of pre-specifying look times, construct a **confidence sequence** that is valid at *any* stopping time.
-
---
-
-.pull-left[
-**Traditional CI:** valid only at fixed sample size $n$.
-
-$$\bar{X}_n \pm z_{\alpha/2} \cdot \frac{s}{\sqrt{n}}$$
-
-Shrinks as $n$ grows. If you stop when it excludes zero, $\alpha > 0.05$.
-]
-
-.pull-right[
-**Confidence sequence:** valid at *all* $n$ simultaneously.
-
-$$\bar{X}_n \pm \sqrt{\frac{2 s^2 (1 + 1/n)}{n} \log\left(\frac{\sqrt{n + 1}}{\alpha}\right)}$$
-
-Wider than fixed-$n$ CI, but you can peek freely.
-]
-
---
-
-.highlight-box[
-**Interview tip:** "We use always-valid p-values / confidence sequences so product teams can check results anytime without inflating false positives. The cost is ~20-30% more samples to reach the same power."
-]
-
----
-
-# Metric Selection: What Are You Optimizing?
-
-.pull-left[
-**Success metrics** (primary):
-- What you're trying to improve
-- e.g., bookings per user, revenue per session
-- Needs to be sensitive enough to detect changes
-
-**Guardrail metrics**:
-- Must not get worse
-- e.g., crash rate, latency, customer complaints
-- Often tested one-sided
-]
-
-.pull-right[
-**Surrogate outcomes:**
-- Long-term outcome (12-mo retention) is slow
-- Use a *proxy* that's measurable quickly
-- e.g., 1st-week engagement predicts 12-mo retention
-- Requires validated relationship
-
-**OEC (Overall Evaluation Criterion):**
-- Single composite metric for decision-making
-- Weighted combination of success + guardrails
-- Makes launch decisions mechanical
-]
-
---
-
-.highlight-box[
-**Interview framework:** "What's the primary metric? What are the guardrails? How long do we need to run? Is there a surrogate that lets us decide faster?"
-]
-
----
-
-# Interview Framework: Designing an Experiment
-
-When an interviewer asks "How would you design an experiment to test X?", use this structure:
-
---
-
-**1. Define the question:** What's the causal effect we want to estimate? On whom?
-
---
-
-**2. Unit of randomization:** User? Session? City? (Think about SUTVA)
-
---
-
-**3. Metrics:** Primary success metric, guardrails, surrogates
-
---
-
-**4. Power:** MDE, sample size, how long to run
-
---
-
-**5. Analysis plan:** What estimator? How to handle non-compliance? Multiple comparisons?
-
---
-
-**6. Threats:** Interference/spillovers, novelty effects, survivorship bias, peeking
-
---
-
-.blue-box[
-Walk through this checklist out loud. Interviewers want to see structured thinking, not just the "right" answer. Every step is a chance to demonstrate depth.
-]
-
----
-
-# Application: Ride-sharing Policy Change
-
-**Scenario:** A city bans surge pricing. Only one city is affected.
-
-.pull-left[
-**Synthetic control approach:**
-1. Donor pool: similar cities without the ban
-2. Match on pre-ban metrics (rides, revenue, wait times)
-3. Construct synthetic city
-4. Gap after ban = causal effect
-5. Placebo tests: apply method to untreated cities
-]
-
-.pull-right[
-```{r app-synth, echo=FALSE, fig.height=3.5}
-# Re-use synth data, relabel
-sc_app <- tibble(
-  week = 1:n_time,
-  `Treated city` = post_wide$`1`,
-  `Synthetic control` = as.numeric(synth_y)
-) |> pivot_longer(-week, names_to = "Series", values_to = "rides")
-
-ggplot(sc_app, aes(week, rides, color = Series)) +
-  geom_line(linewidth = 1.2) +
-  geom_vline(xintercept = treat_time - 0.5, linetype = "dashed") +
-  annotate("text", x = 15, y = 5.5, label = "Surge ban\neffect",
-           color = "firebrick", size = 4) +
-  scale_color_manual(values = c("steelblue", "firebrick")) +
-  labs(title = "Estimated effect of surge pricing ban",
-       x = "Week", y = "Rides per capita", color = "")
-```
-]
-
----
-
-# Application: Feature Rollout with Sequential Testing
-
-**Scenario:** Rolling out a new matching algorithm. Want to detect a 2% improvement in completion rate, but product wants to check results weekly.
-
---
+All four heterogeneity-robust estimators solve the same problem — only use **clean** comparisons (treated vs not-yet-treated or never-treated):
 
 .small[
-```{r app-seq, echo=FALSE, fig.height=3.5}
-# Simulate a sequential test with a real effect
-set.seed(123)
-n_per_week <- 5000
-n_weeks <- 8
-true_effect <- 0.02
-base_rate <- 0.70
-
-weekly_data <- tibble(week = 1:n_weeks) |>
-  mutate(
-    n_cum = n_per_week * week,
-    control_conv = map_dbl(n_cum, ~ mean(rbinom(.x, 1, base_rate))),
-    treat_conv = map_dbl(n_cum, ~ mean(rbinom(.x, 1, base_rate + true_effect))),
-    diff = treat_conv - control_conv,
-    se = sqrt(treat_conv * (1 - treat_conv) / n_cum +
-                control_conv * (1 - control_conv) / n_cum),
-    z_stat = diff / se,
-    # O'Brien-Fleming boundary (approximate)
-    obf_bound = qnorm(1 - 0.025 / sqrt(week / n_weeks)),
-    reject = z_stat > obf_bound
-  )
-
-ggplot(weekly_data, aes(week)) +
-  geom_line(aes(y = z_stat, color = "Test statistic"), linewidth = 1.2) +
-  geom_point(aes(y = z_stat, color = "Test statistic"), size = 3) +
-  geom_line(aes(y = obf_bound, color = "OBF boundary"), linewidth = 1,
-            linetype = "dashed") +
-  geom_point(aes(y = obf_bound, color = "OBF boundary"), size = 2) +
-  scale_color_manual(values = c("firebrick", "steelblue")) +
-  labs(title = "Sequential test: cross the boundary to reject",
-       x = "Week", y = "z-statistic / boundary", color = "") +
-  theme(legend.position = "top")
-```
+| Estimator | Year | Core idea | R package |
+|---|---|---|---|
+| **Callaway & Sant'Anna** | 2021 | Group-time ATT $(g, t)$, then aggregate | `did` |
+| **Sun & Abraham** | 2021 | Saturated event-study with cohort×event-time interactions | `fixest` (`sunab()`) |
+| **de Chaisemartin & D'Haultfœuille** | 2020 | Switchers vs not-yet-switchers | `DIDmultiplegt` |
+| **Borusyak, Jaravel, Spiess** | 2024 | Impute $Y(0)$ from never-treated, then average residuals | `didimputation` |
 ]
-
---
-
-Stops early if the effect is large; runs to completion if it's small. Controls Type I error throughout.
-
----
-
-# Application: Bandit for Driver Incentives
-
-**Scenario:** Testing 4 incentive levels ($5, $10, $15, $20) to maximize driver sign-ups. Each "wrong" choice costs money.
-
-```{r app-bandit, echo=FALSE, fig.height=3.5}
-set.seed(42)
-true_rates <- c(0.08, 0.12, 0.14, 0.11)  # $15 is best
-arms <- paste0("$", c(5, 10, 15, 20))
-n_rounds_b <- 2000
-K <- length(true_rates)
-
-# Thompson Sampling
-alpha_ts <- rep(1, K)
-beta_ts <- rep(1, K)
-ts_arm <- integer(n_rounds_b)
-ts_rew <- numeric(n_rounds_b)
-
-for (i in 1:n_rounds_b) {
-  draws <- rbeta(K, alpha_ts, beta_ts)
-  chosen <- which.max(draws)
-  reward <- rbinom(1, 1, true_rates[chosen])
-  alpha_ts[chosen] <- alpha_ts[chosen] + reward
-  beta_ts[chosen] <- beta_ts[chosen] + (1 - reward)
-  ts_arm[i] <- chosen
-  ts_rew[i] <- reward
-}
-
-alloc_df <- tibble(round = 1:n_rounds_b, arm = ts_arm) |>
-  mutate(arm_label = arms[arm]) |>
-  group_by(arm_label) |>
-  mutate(cum_count = row_number()) |>
-  ungroup()
-
-alloc_summary <- alloc_df |>
-  group_by(arm_label) |>
-  summarise(n = n(), .groups = "drop") |>
-  mutate(frac = n / sum(n))
-
-ggplot(alloc_summary, aes(arm_label, frac, fill = arm_label)) +
-  geom_col(show.legend = FALSE) +
-  geom_text(aes(label = paste0(round(100 * frac), "%")), vjust = -0.5, size = 5) +
-  scale_fill_brewer(palette = "Blues") +
-  labs(title = "Thompson Sampling concentrates on the best arm ($15)",
-       x = "Incentive level", y = "Fraction of traffic") +
-  ylim(0, 0.7)
-```
-
-The bandit learns the $15 incentive is best and allocates most traffic there, minimizing wasted spend.
-
----
-
-# Putting It All Together
-
-| Method | When to use | Key assumption | Estimates |
-|--------|------------|----------------|-----------|
-| **Synthetic control** | 1 treated unit, donor pool | Pre-treatment fit | Treated unit's effect |
-| **RD** | Treatment assigned by cutoff | Continuity at cutoff | LATE at cutoff |
-| **DiD** | Panel data, staggered adoption | Parallel trends | ATT |
-| **Bandits** | Optimizing allocation | Stationarity | Regret, not ATE |
-| **Sequential testing** | Interim monitoring | Pre-specified boundaries | ATE with valid $\alpha$ |
-
---
 
 .highlight-box[
-**Meta-lesson:** Each method trades off something. Synthetic control needs a good donor pool. RD is local. DiD needs parallel trends. Bandits sacrifice inference. Sequential testing sacrifices power. Know the trade-offs --- that's what interviewers test.
+All four converge in simple cases. Pick one, report the event-study plot, and check robustness with another. **Callaway & Sant'Anna is the most-cited workhorse.**
 ]
 
 ---
 
-# Key Takeaways
+# Callaway-Sant'Anna in Practice
 
-1. **Synthetic control** builds a data-driven counterfactual from weighted donors when you have only one treated unit.
+The estimand is the **group-time ATT** $\text{ATT}(g, t)$: the effect on cohort $g$ at calendar time $t$. We hand-compute it as a 2×2 DiD between each cohort and the never-treated, then plot by event time.
 
-2. **RD** exploits cutoff-based assignment --- local randomization gives you a credible causal estimate near the threshold.
+```{r cs-handcoded, echo=FALSE, fig.height=3}
+cohort_means <- panel |> filter(is.finite(g)) |>
+  group_by(g, t) |> summarise(y = mean(y), .groups = "drop")
+never_means <- panel |> filter(is.infinite(g)) |>
+  group_by(t) |> summarise(y_nev = mean(y), .groups = "drop")
 
-3. **DiD** relies on parallel trends. Test with pre-trends; if violated, consider alternative methods.
+att_gt <- cohort_means |> left_join(never_means, by = "t") |>
+  group_by(g) |>
+  mutate(att = (y - y[t == g - 1]) - (y_nev - y_nev[t == g - 1])) |>
+  ungroup() |> mutate(e = t - g)
 
-4. **Bandits** optimize reward during the experiment but make inference harder. Use when the cost of suboptimal allocation outweighs the need for measurement.
+ggplot(att_gt, aes(e, att, color = factor(g))) +
+  geom_line(linewidth = 0.9) + geom_point() +
+  geom_hline(yintercept = 0) + geom_vline(xintercept = -0.5, linetype = "dashed") +
+  labs(x = "Event time (t - g)", y = "ATT(g,t)", color = "Cohort g")
+```
 
-5. **Sequential testing** lets you peek at results without inflating false positives, at the cost of wider confidence intervals.
+Each cohort's ATT path is positive and growing post-treatment — the heterogeneity TWFE smeared. <a href="#cs-code" class="inline-btn">code</a>
 
-6. **Metric selection** is often the most important design decision. Define success, guardrails, and surrogates before running anything.
+---
+name: honest-did-main
 
-7. **Use the structured framework** (question, unit, metrics, power, analysis, threats) for any experiment design interview question.
+# Honest DiD — Bounds Under Partial PT Violations
+
+Pretrend tests have low power. What if parallel trends is "almost but not quite" right?
+
+.blue-box[
+**Rambachan & Roth (2023):** Don't pretend PT holds exactly. Posit a bound on how much the post-treatment differential trend can deviate from the pre-trend, then report a *robust confidence interval*.
+]
+
+--
+
+Two common restrictions:
+- **Smoothness ($M$):** the post-treatment violation can be at most $M$ times larger than the largest pre-treatment violation.
+- **Relative magnitudes:** the post-period violation cannot exceed the worst pre-period violation.
+
+The output is a *sensitivity plot*: the CI grows as you allow more violation. If your conclusion survives plausible $M$, you're robust.
+
+<a href="#honest-did-detail" class="nav-btn">visualization</a>
 
 ---
 
-# Exercise Preview
+# Application: Staggered Zone-Notification Rollout
 
-In the exercise you will:
+Three city cohorts adopt zone-notification at $t=8, 12, 16$. The true effect is positive and **larger for earlier adopters** (these cities had more underserved zones). What does each estimator say?
 
-1. Implement Thompson Sampling from scratch and compare cumulative regret to a fixed A/B test
-2. Simulate peeking in an A/A test and measure false positive inflation
-3. Implement a simple group sequential boundary and show it controls $\alpha$
-4. Build a basic synthetic control and estimate the treatment effect
+.small[
+```{r app-twfe-vs-cs, echo=FALSE}
+# True average post-treatment effect across treated obs
+true_att <- panel |> filter(t >= g, is.finite(g)) |>
+  summarise(true = mean(eff)) |> pull(true)
+twfe <- coef(feols(y ~ treated | city + t, data = panel))["treatedTRUE"]
+# Sun-Abraham via fixest::sunab — average post-treatment effect
+panel_sa <- panel |> mutate(g_sa = if_else(is.infinite(g), 10000, g))
+fit_sa <- feols(y ~ sunab(g_sa, t) | city + t, data = panel_sa)
+sa_avg <- summary(fit_sa, agg = "att")$coeftable["ATT", "Estimate"]
+# Hand-coded CS aggregate (simple average of post-treatment ATT(g,t))
+cs_avg <- att_gt |> filter(t >= g) |> summarise(m = mean(att, na.rm = TRUE)) |> pull(m)
 
-See `exercise.R` for the starter code.
+tibble(
+  Estimator = c("Truth", "TWFE (biased)", "Sun-Abraham", "Callaway-Sant'Anna (hand)"),
+  Estimate  = c(true_att, twfe, sa_avg, cs_avg)
+) |> knitr::kable(digits = 3)
+```
+]
+
+TWFE is downward-biased — early cohorts (with the largest effects) get re-used as controls for later cohorts, dragging the estimate down. CS and SA recover the truth.
 
 ---
+
+class: center, middle, inverse
+
+# Part 2 — Synthetic Control
+
+---
+
+# When You Have *One* Treated Unit
+
+A single city introduces a policy (e.g., a minimum-wage floor for drivers). No randomization, no comparable control city. **Build one from a donor pool.**
+
+```{r sc-data, echo=FALSE, fig.height=3.4}
+n_donor <- 9; n_T <- 30; t_treat <- 21
+donors <- matrix(NA, n_T, n_donor)
+true_w <- c(0.35, 0.25, 0.15, 0.10, 0.10, 0.05, 0, 0, 0)  # the synthetic mix
+for (j in 1:n_donor) {
+  donors[, j] <- 5 + 0.04 * (1:n_T) + 0.5 * sin((1:n_T) / 5 + j) +
+                 j * 0.15 + rnorm(n_T, 0, 0.2)
+}
+treated_y0 <- as.numeric(donors %*% true_w) + rnorm(n_T, 0, 0.15)
+treated_y  <- treated_y0
+treated_y[t_treat:n_T] <- treated_y[t_treat:n_T] - 0.8  # policy effect
+
+sc_long <- bind_rows(
+  tibble(t = 1:n_T, y = treated_y, unit = "Treated"),
+  expand_grid(t = 1:n_T, j = 1:n_donor) |>
+    mutate(y = donors[cbind(t, j)], unit = paste0("Donor ", j))
+)
+
+ggplot(sc_long, aes(t, y, group = unit,
+                    color = unit == "Treated", linewidth = unit == "Treated")) +
+  geom_line(alpha = 0.7) +
+  geom_vline(xintercept = t_treat - 0.5, linetype = "dashed") +
+  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "firebrick"), guide = "none") +
+  scale_linewidth_manual(values = c("FALSE" = 0.5, "TRUE" = 1.2), guide = "none") +
+  labs(x = "Period", y = "Outcome")
+```
+
+No single donor matches. A **convex combination** might.
+
+---
+
+# Synthetic Control: The Estimator
+
+Choose weights $w_j \ge 0$ with $\sum_j w_j = 1$ to match the treated unit's *pre-treatment* outcomes:
+
+$$\min_{w} \sum_{t < T_0} \left( Y_{1t} - \sum_{j \ge 2} w_j Y_{jt} \right)^2 \;\; \text{s.t.}\;\; w_j \ge 0,\;\; \sum_j w_j = 1$$
+
+.small[
+```{r sc-fit, fig.height=2.8}
+# NNLS-style projection on the simplex (simplified: quadprog or by hand)
+pre <- 1:(t_treat - 1)
+A <- donors[pre, ]; b <- treated_y[pre]
+# Project to simplex via solve.QP (quadratic prog)
+library(quadprog)
+Dmat <- 2 * t(A) %*% A; dvec <- 2 * t(A) %*% b
+Amat <- cbind(rep(1, n_donor), diag(n_donor))      # sum=1, w_j>=0
+bvec <- c(1, rep(0, n_donor))
+w_hat <- solve.QP(Dmat, dvec, Amat, bvec, meq = 1)$solution
+synth_y <- as.numeric(donors %*% w_hat)
+gap <- treated_y - synth_y
+round(w_hat, 3)
+```
+]
+
+The fitted weights match true weights closely on donors 1-3.
+
+---
+
+# Synthetic Control: Inference via Placebos
+
+Standard errors don't work — we have one treated unit. Instead: **placebo-in-space**. Re-run the procedure pretending each *donor* is the treated unit. If the true treated unit's gap is unusually large vs the placebo distribution, that's evidence of an effect.
+
+```{r sc-placebos, echo=FALSE, fig.height=3.4}
+# Placebo: each donor as treated, against the rest
+get_gap <- function(treated_idx) {
+  y <- donors[, treated_idx]
+  D <- donors[, -treated_idx, drop = FALSE]
+  Dmat <- 2 * t(D[pre, ]) %*% D[pre, ]; dvec <- 2 * t(D[pre, ]) %*% y[pre]
+  k <- ncol(D)
+  Amat <- cbind(rep(1, k), diag(k)); bvec <- c(1, rep(0, k))
+  w <- tryCatch(solve.QP(Dmat, dvec, Amat, bvec, meq = 1)$solution, error = function(e) NA)
+  if (any(is.na(w))) return(rep(NA, n_T))
+  y - as.numeric(D %*% w)
+}
+placebo_gaps <- sapply(1:n_donor, get_gap)
+
+plot_df <- bind_rows(
+  tibble(t = 1:n_T, gap = gap, unit = "Treated"),
+  as_tibble(placebo_gaps) |> mutate(t = 1:n_T) |>
+    pivot_longer(-t, names_to = "unit", values_to = "gap")
+)
+ggplot(plot_df, aes(t, gap, group = unit, color = unit == "Treated")) +
+  geom_line(alpha = 0.7) + geom_hline(yintercept = 0) +
+  geom_vline(xintercept = t_treat - 0.5, linetype = "dashed") +
+  scale_color_manual(values = c("FALSE" = "grey70", "TRUE" = "firebrick"), guide = "none") +
+  labs(x = "Period", y = "Gap (treated − synthetic)")
+```
+
+The treated gap (red) drops below the placebo cloud after $t=21$ — the effect is real.
+
+---
+
+# Synthetic DiD: The Bridge
+
+Arkhangelsky et al. (2021) generalize both DiD and SC. **Synthetic DiD** uses *two* sets of weights:
+
+.blue-box[
+- **Unit weights** ($\hat\omega_i$) — like SC, match pre-treatment trajectories of donors to the treated unit.
+- **Time weights** ($\hat\lambda_t$) — match pre-treatment outcomes of the treated unit to its own post-treatment level (down-weights periods that don't look like "now").
+]
+
+.small[
+$$\widehat{\tau}_{\text{SDID}} = \arg\min_{\tau, \mu, \alpha, \beta} \sum_{i,t} (Y_{it} - \mu - \alpha_i - \beta_t - \tau D_{it})^2 \, \hat\omega_i \, \hat\lambda_t$$
+]
+
+--
+
+Why this matters:
+- **DiD** uses uniform weights → biased when donors don't match.
+- **SC** uses unit weights only → can over-fit pre-period noise.
+- **SDID** uses both → robust to both. In Arkhangelsky's empirical comparisons, lower MSE than either alone.
+
+<a href="#sdid-detail" class="nav-btn">SDID estimator detail</a>
+
+---
+
+class: center, middle, inverse
+
+# Part 3 — Causal Forest
+
+---
+
+# Why HTE — Beyond the ATE
+
+ATE answers: "should we ship?" HTE answers: "**to whom**?"
+
+.highlight-box[
+The zone-notification feature has $\widehat{\text{ATE}} = +\$50$/wk. But the effect probably varies — by city density, driver tenure, time-of-week patterns. **Knowing the heterogeneity lets you target rollout, set personalized policies, and forecast aggregate impact under different deployment plans.**
+]
+
+--
+
+Classic approach: pre-specify subgroups, run interactions. Two problems:
+- **Multiple testing** — interview question from M6.
+- **Misspecification** — the right subgroups aren't always the obvious ones.
+
+**Causal forest** (Wager & Athey 2018, Athey-Tibshirani-Wager 2019): non-parametric estimation of $\tau(x) = E[Y(1) - Y(0) \mid X = x]$ using an ensemble of *honest* trees.
+
+---
+
+# Causal Forest — How It Works
+
+.pull-left[
+**Honest splitting** is the key trick. Each tree:
+
+1. Splits the sample into two halves.
+2. Uses one half to *grow* the tree (decide where to split).
+3. Uses the other half to *estimate* the treatment effect within each leaf.
+
+This separation prevents the same observation from informing both the split rule and the estimate inside it — eliminating the over-fitting bias that plagues vanilla trees.
+]
+
+.pull-right[
+**Forest-level prediction** for a new $x$:
+- Each tree drops $x$ down to a leaf.
+- The leaf defines a *local neighborhood* — observations with similar covariates.
+- $\hat\tau(x)$ = a *weighted* DiD or IV across that neighborhood, with weights coming from how often training points share a leaf with $x$.
+
+The result has pointwise confidence intervals — Wager & Athey prove asymptotic normality.
+]
+
+<a href="#cf-splitting-detail" class="nav-btn">splitting algorithm</a>
+
+---
+
+# Causal Forest in Practice — `grf`
+
+```{r cf-setup, echo=FALSE}
+library(grf)
+# DGP: zone-notification HTE depends on driver tenure + city density
+n <- 4000
+X <- tibble(tenure = rexp(n, rate = 1/2), density = runif(n, 0, 1),
+            age = sample(20:65, n, replace = TRUE))
+W <- rbinom(n, 1, 0.5)
+true_tau <- 30 + 60 * X$density - 10 * pmin(X$tenure, 4)
+Y <- 700 + 50 * X$age * 0.5 + true_tau * W + rnorm(n, 0, 80)
+```
+
+.small[
+```{r cf-fit}
+cf <- causal_forest(X = as.matrix(X), Y = Y, W = W, num.trees = 1000)
+average_treatment_effect(cf)                    # ATE estimate + SE
+```
+]
+
+```{r cf-plot, echo=FALSE, fig.height=2.6}
+tau_hat <- predict(cf)$predictions
+bind_cols(X, true = true_tau, hat = tau_hat) |>
+  ggplot(aes(density, hat, color = pmin(tenure, 5))) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(aes(y = true), color = "black", linetype = "dashed", se = FALSE) +
+  scale_color_viridis_c(name = "Tenure (yrs)") +
+  labs(x = "City density", y = expression(hat(tau)(x)))
+```
+
+Predicted $\hat\tau(x)$ rises with density; the forest recovers the truth (dashed). <a href="#cf-dgp" class="inline-btn">DGP code</a>
+
+---
+
+# Policy Learning — A Quick Teaser
+
+Once you have $\hat\tau(x)$, you can learn a **treatment rule** $\pi(x) \in \{0, 1\}$ that maximizes welfare:
+
+$$\pi^*(x) = \mathbb{1}\{\hat\tau(x) > c(x)\}$$
+
+where $c(x)$ is a per-unit cost (e.g., the cost of pushing a notification).
+
+.blue-box[
+- **`grf::policy_tree`** — fit a depth-$L$ decision tree over $X$ that maximizes welfare. Output: an interpretable rule like *"deploy in dense cities to drivers with <2 years tenure."*
+- **Athey & Wager (2021):** regret bounds for these rules.
+]
+
+This is what gets used to *deploy* the model. ATE answers "ship?". HTE answers "to whom?". Policy learning answers "**what should we actually do?**"
+
+---
+
+class: center, middle, inverse
+
+# Part 4 — One-Pagers
+
+---
+
+# Bandits — Adaptive Experimentation in One Slide
+
+.small[
+**Setup:** $K$ arms (e.g., 4 ad creatives). At each step, pick one, observe reward. Goal: maximize cumulative reward, not just identify the best arm.
+
+**Thompson Sampling** (the workhorse): maintain a posterior over each arm's reward, sample from it, play the argmax. Asymptotically optimal regret; minimal tuning.
+]
+
+```{r bandit-quick, echo=FALSE, fig.height=2.4}
+set.seed(7)
+T_steps <- 1000; K <- 4; true_p <- c(0.10, 0.12, 0.15, 0.13)
+S <- rep(0, K); F <- rep(0, K); reg <- numeric(T_steps)
+for (t in 1:T_steps) {
+  theta <- rbeta(K, S + 1, F + 1)
+  a <- which.max(theta)
+  r <- rbinom(1, 1, true_p[a])
+  S[a] <- S[a] + r; F[a] <- F[a] + (1 - r)
+  reg[t] <- max(true_p) - true_p[a]
+}
+tibble(t = 1:T_steps, cum_reg = cumsum(reg)) |>
+  ggplot(aes(t, cum_reg)) + geom_line(color = "firebrick", linewidth = 1) +
+  labs(x = "Step", y = "Cumulative regret")
+```
+
+.small[
+**When *not* to use:** when you need an unbiased ATE for a fixed-population decision (a launch / kill call). Bandits make assignment correlated with outcome history — naive analysis is biased.
+]
+
+---
+
+# Sequential Testing in One Slide
+
+.small[
+**Problem:** classical $p$-values are valid only at one fixed $n$. Peeking inflates Type-I error — by $t=N$, the running $p$-value will dip below 0.05 about 30% of the time *under the null*.
+
+**Two fixes used in industry:**
+- **Group-sequential / O'Brien-Fleming:** spend the $\alpha$ budget on a pre-specified schedule of looks. Conservative early, normal late.
+- **Always-valid CIs / mSPRT:** mixture sequential probability ratio. Confidence sequences that hold *uniformly over time*. Stop whenever you want; CIs stay valid.
+]
+
+```{r seq-quick, echo=FALSE, fig.height=2.4}
+set.seed(1)
+n_max <- 2000; sims <- 200
+peek_reject <- replicate(sims, {
+  x <- rnorm(n_max); rejected <- FALSE
+  for (n in seq(50, n_max, by = 50)) {
+    if (abs(t.test(x[1:n])$statistic) > 1.96) { rejected <- TRUE; break }
+  }
+  rejected
+})
+mean(peek_reject)   # Type-I rate from peeking — should be ~0.30
+```
+
+.small[
+Under $H_0$, naive peeking yields ≈30% rejection rate, not 5%. mSPRT or OBF would hold this near 5%.
+]
+
+<a href="#mSPRT-detail" class="nav-btn">mSPRT formula</a>
+
+---
+
+class: center, middle, inverse
+
+# Part 5 — Wrap-Up
+
+---
+
+# Decision Tree: Which Method When
+
+.small[
+**Got randomization?** → Use the M5 toolkit (regression adjustment, CUPED, ITT/LATE).
+
+**Staggered rollout, multiple cities, multiple time periods?**
+- Heterogeneous effects expected? → **Callaway-Sant'Anna** (or Sun-Abraham). Avoid TWFE.
+- Worried about parallel trends? → **Honest DiD** sensitivity bounds.
+
+**Single treated unit?** → **Synthetic control** (or **SDID** if you have a moderate-size donor pool).
+
+**Want effect heterogeneity?** → **Causal forest** for $\hat\tau(x)$; **policy tree** for an interpretable deployment rule.
+
+**Many arms, online learning?** → **Thompson Sampling**, *unless* you need a clean ATE.
+
+**Repeated looks at one experiment?** → **mSPRT / always-valid CIs**.
+]
+
+---
+
+# Interview Cheat Sheet
+
+.blue-box[
+**"Walk me through how you'd analyze a staggered rollout."** Three steps. (1) Plot raw outcomes by cohort and event time — does parallel trends look plausible? (2) Don't run TWFE; run Callaway-Sant'Anna and report the event-study plot. (3) Sensitivity-check with Honest DiD and a robustness column from Sun-Abraham.
+]
+
+.blue-box[
+**"How do you estimate a causal effect for one city?"** Synthetic control. Build weights from a donor pool to match pre-treatment outcomes. Inference via placebo-in-space. Mention SDID as the modern improvement.
+]
+
+.blue-box[
+**"How do you get heterogeneous treatment effects?"** Causal forest from `grf`. Honest splitting prevents over-fit. Aggregate to ATE for sanity-check; predict $\hat\tau(x)$ for new units; feed into a policy tree if a deployment rule is needed.
+]
+
+.highlight-box[
+**Red flag in interviews:** running TWFE on staggered data without a Goodman-Bacon diagnostic.
+]
+
+---
+
+# Going Deeper
+
+This module is a tour, not a treatment. Each of the three core methods has a course's worth of material behind it.
+
+.blue-box[
+**Companion course (in development):** *Causal Inference Beyond A/B Tests* — a deep dive into modern DiD (formal CS / SA / BJS estimators, full Honest DiD), synthetic control variants (augmented SC, generalized SC, matrix completion), and the Athey-Wager causal-forest stack (policy learning, contextual bandits via causal trees).
+
+Repo will live alongside this one at `~/Desktop/sandbox/courses/causal-inference-beyond-ab/` and link from the same landing page.
+]
+
+For the read-now references behind today's slides:
+
+.small[
+- **Goodman-Bacon (2021)** — *Difference-in-differences with variation in treatment timing*, J. Econometrics.
+- **Callaway & Sant'Anna (2021)** — *Difference-in-differences with multiple time periods*, J. Econometrics.
+- **Arkhangelsky et al. (2021)** — *Synthetic difference in differences*, AER.
+- **Wager & Athey (2018)** — *Estimation and inference of heterogeneous treatment effects using random forests*, JASA.
+- **Rambachan & Roth (2023)** — *A more credible approach to parallel trends*, ReStud.
+]
+
+---
+
 class: center, middle, inverse
 
 # Backup Slides
 
 ---
+name: pretrend-power-detail
 
-# Backup: Why Peeking Inflates False Positives
+# Backup: The Roth (2022) Pretrend Critique
 
-Under $H_0$ (no effect), the test statistic $Z_n = \frac{\bar{X}_n - \bar{Y}_n}{\text{SE}_n}$ follows a random walk:
+The standard pretrend test asks: do the pre-treatment leads have $p > 0.05$? Failing to reject is taken as evidence parallel trends holds.
 
---
+**The problem:** these tests have low power against linear (or near-linear) violations — exactly the kind that would bias the post-treatment estimate.
 
-- At any single time $n$, $P(|Z_n| > 1.96) = 0.05$
+```{r roth-power, echo=FALSE, fig.height=3.2}
+# Simulate: under a linear violation, what's the prob of detecting it?
+sim_power <- function(slope, n_pre = 4, sd = 1, n_sim = 1000) {
+  mean(replicate(n_sim, {
+    pre_diffs <- slope * (-n_pre:-1) + rnorm(n_pre, 0, sd)
+    abs(mean(pre_diffs)) / (sd / sqrt(n_pre)) > 1.96
+  }))
+}
+df <- tibble(slope = seq(0, 0.5, 0.05)) |>
+  mutate(power = map_dbl(slope, sim_power))
+ggplot(df, aes(slope, power)) + geom_line(linewidth = 1, color = "firebrick") +
+  geom_hline(yintercept = 0.8, linetype = "dashed") +
+  labs(x = "True linear pre-trend slope", y = "Power to detect")
+```
 
---
+Even a *meaningful* linear violation is missed most of the time. Roth's recommendation: use Honest DiD bounds rather than relying on the pretrend test.
 
-- But across many times, the process will *eventually* cross 1.96 with probability 1 (by the law of the iterated logarithm)
+<a href="#parallel-trends-main" class="nav-btn">← back</a>
 
---
+---
+name: staggered-dgp-detail
 
-- With $k$ equally-spaced looks, $P(\text{ever reject}) \approx \alpha \cdot \rho(k)$ where $\rho(k)$ grows with $k$
+# Backup: Staggered-Adoption DGP
 
---
+.small[
+```{r staggered-dgp-show, eval=FALSE}
+n_cities <- 12; n_t <- 24
+cohorts <- tibble(
+  city = 1:n_cities,
+  g = c(rep(8, 3), rep(12, 3), rep(16, 3), rep(Inf, 3))
+)
+panel <- expand_grid(city = 1:n_cities, t = 1:n_t) |>
+  left_join(cohorts, by = "city") |>
+  mutate(
+    treated = t >= g,
+    # heterogeneous, time-varying effect: bigger for earlier cohorts
+    eff = if_else(treated, 0.6 * (1 + 0.05 * (t - g)) *
+                            (1 + 0.3 * (g == 8) - 0.2 * (g == 16)), 0),
+    y = 5 + 0.05 * t + city * 0.1 + eff + rnorm(n(), 0, 0.3)
+  )
+```
+]
+
+Three cohorts adopt at $t = 8, 12, 16$; three never adopt. Effect grows over time and is **larger for earlier cohorts** — the classic case where TWFE breaks.
+
+<a href="#staggered-adoption-what-changes" class="nav-btn">← back</a>
+
+---
+name: goodman-bacon-derivation
+
+# Backup: The Goodman-Bacon Decomposition
+
+For TWFE with staggered timing, the OLS coefficient $\hat\beta_{\text{TWFE}}$ decomposes as:
+
+$$\hat\beta_{\text{TWFE}} = \sum_{k} s_k \, \widehat{\text{ATT}}_k$$
+
+where each $\widehat{\text{ATT}}_k$ is a 2×2 DiD between two cohorts (or a cohort and the never-treated), and the weights $s_k$ depend on:
+
+- size of each cohort,
+- timing of treatment,
+- variance of treatment exposure within the panel.
 
 .highlight-box[
-The Brownian motion analogy: a random walk that's currently at 0 will eventually hit any finite boundary. More looks = more chances to cross. Sequential boundaries grow over time to compensate.
+**The bug:** when an *earlier-treated* cohort is used as a comparison group for a *later-treated* one, the post-period for the comparison cohort is also under treatment. So that 2×2 has the form $(\Delta Y_{\text{treated}}) - (\Delta Y_{\text{also treated, but longer ago}})$, and the second piece subtracts a *treatment-effect trend*, not a counterfactual.
+
+If treatment effects grow over time, this 2×2 gets a *negative* contribution. TWFE's "weighted average" puts positive weight on this, biasing $\hat\beta$ downward.
 ]
 
----
-
-# Backup: Thompson Sampling Derivation
-
-**Setup:** $K$ arms, arm $k$ has unknown conversion rate $\theta_k$. Prior: $\theta_k \sim \text{Beta}(1, 1)$ (uniform).
-
---
-
-**Update rule:** After observing $s_k$ successes and $f_k$ failures on arm $k$:
-
-$$\theta_k \mid \text{data} \sim \text{Beta}(1 + s_k, 1 + f_k)$$
-
---
-
-**Selection:** At each round, draw $\tilde{\theta}_k \sim \text{Beta}(1 + s_k, 1 + f_k)$ for each arm. Play the arm with the highest draw.
-
---
-
-**Why it works:** The probability of selecting arm $k$ equals the posterior probability that arm $k$ is optimal. This naturally balances exploration (uncertain arms get sampled) and exploitation (high-reward arms get sampled more).
+<a href="#the-twfe-estimator-looks-innocent-isnt" class="nav-btn">← back</a>
 
 ---
+name: honest-did-detail
 
-# Backup: Synthetic Control Inference
+# Backup: Honest DiD Visualization
 
-Standard inference (t-tests, CIs) doesn't apply --- you have one treated unit.
+The robust CI grows as you allow more violation. The point estimate stays — only the uncertainty changes.
 
---
+```{r honest-did-viz, echo=FALSE, fig.height=3.5}
+# Stylized illustration
+df <- tibble(
+  M = seq(0, 2, 0.05),
+  est = 0.5,
+  lb = 0.5 - 0.15 - 0.4 * M,
+  ub = 0.5 + 0.15 + 0.4 * M
+)
+ggplot(df, aes(M, est)) +
+  geom_ribbon(aes(ymin = lb, ymax = ub), alpha = 0.3, fill = "firebrick") +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  annotate("text", x = 1.4, y = 0.55, label = "Robust CI",
+           color = "firebrick", size = 4) +
+  labs(x = expression("Allowed violation magnitude " * (M)),
+       y = "Treatment effect estimate")
+```
 
-**Permutation inference:** Apply the synthetic control method to each *untreated* unit (pretend it was treated). This gives you a distribution of placebo effects.
+The smallest $M$ at which the CI crosses zero is the **breakdown value** — how much PT violation you'd need to tolerate before your conclusion flips.
 
---
+<a href="#honest-did-main" class="nav-btn">← back</a>
 
-**p-value:** Fraction of placebo effects as large as the actual effect.
+---
+name: sdid-detail
 
-$$p = \frac{\sum_{j \neq 1} \mathbf{1}[|\hat{\tau}_j| \geq |\hat{\tau}_1|]}{J}$$
+# Backup: SDID Estimator Mechanics
 
---
+The SDID estimator solves:
+
+$$(\hat\tau, \hat\mu, \hat\alpha, \hat\beta) = \arg\min \sum_{it} (Y_{it} - \mu - \alpha_i - \beta_t - \tau D_{it})^2 \, \hat\omega_i \, \hat\lambda_t$$
+
+where $\hat\omega_i$ are unit weights from a regularized SC-style fit, and $\hat\lambda_t$ are time weights from an analogous time-domain fit.
 
 .blue-box[
-With 10 donor units, the smallest possible p-value is 0.10. You need a large donor pool for precise inference --- another limitation of the method.
+**Why the regularization matters.** SC's unit weights can over-fit pre-period noise on a short pre-period — picking a donor combination that matches noise rather than the underlying trend. SDID adds an $L_2$ penalty on the weights, smoothing the solution and reducing variance.
+
+**Why the time weights matter.** They down-weight pre-periods that don't resemble the treatment period, focusing the comparison on "comparable" history. This is what makes SDID robust to the donor-pool drift that breaks SC.
 ]
 
+R implementation: `synthdid::synthdid_estimate()`. The package returns the estimate, jackknife SE, and a built-in SC vs DiD vs SDID comparison plot.
+
+<a href="#synthetic-did-the-bridge" class="nav-btn">← back</a>
+
 ---
+name: cs-code
 
-# Backup: DiD Event Study Specification
+# Backup: Hand-Coded Callaway-Sant'Anna
 
-To test parallel trends, estimate the event-study regression:
+.small[
+```{r cs-handcoded-show, eval=FALSE}
+cohort_means <- panel |> filter(is.finite(g)) |>
+  group_by(g, t) |> summarise(y = mean(y), .groups = "drop")
+never_means <- panel |> filter(is.infinite(g)) |>
+  group_by(t) |> summarise(y_nev = mean(y), .groups = "drop")
 
-$$Y_{it} = \alpha_i + \lambda_t + \sum_{k \neq -1} \beta_k \cdot \mathbf{1}[t - t^* = k] \cdot D_i + \varepsilon_{it}$$
+# ATT(g, t) = (Y_g,t - Y_g,g-1) - (Y_never,t - Y_never,g-1)
+att_gt <- cohort_means |> left_join(never_means, by = "t") |>
+  group_by(g) |>
+  mutate(att = (y - y[t == g - 1]) - (y_nev - y_nev[t == g - 1])) |>
+  ungroup() |> mutate(e = t - g)
+```
+]
 
---
+This is the simplest version: each cohort vs never-treated, anchored at $t = g - 1$. Production CS adds: not-yet-treated (vs only never-treated) controls, doubly-robust adjustment, and influence-function based standard errors. The `did` package implements all three.
 
-where $t^*$ is the treatment time, $D_i$ indicates the treated group, and $k = -1$ is the omitted reference period.
+<a href="#callaway-santanna-in-practice" class="nav-btn">← back</a>
 
---
+---
+name: cf-dgp
 
-**What to look for:**
-- Pre-treatment coefficients $\beta_k$ for $k < -1$ should be close to zero (parallel pre-trends)
-- Post-treatment coefficients $\beta_k$ for $k \geq 0$ estimate dynamic treatment effects
-- Confidence intervals on pre-treatment $\beta_k$ tell you about power to detect violations
+# Backup: Causal-Forest DGP
+
+.small[
+```{r cf-dgp-show, eval=FALSE}
+library(grf)
+# DGP: zone-notification HTE depends on driver tenure + city density
+n <- 4000
+X <- tibble(tenure = rexp(n, rate = 1/2),    # years
+            density = runif(n, 0, 1),        # city density 0-1
+            age = sample(20:65, n, replace = TRUE))
+W <- rbinom(n, 1, 0.5)
+# Heterogeneous true effect: rises with density, falls with tenure (capped)
+true_tau <- 30 + 60 * X$density - 10 * pmin(X$tenure, 4)
+Y <- 700 + 50 * X$age * 0.5 + true_tau * W + rnorm(n, 0, 80)
+```
+]
+
+The HTE pattern: drivers in dense cities benefit most ($+\$60$/wk per density unit); long-tenured drivers benefit less (already routing efficiently). The forest must recover this without us specifying the functional form.
+
+<a href="#causal-forest-in-practice-grf" class="nav-btn">← back</a>
+
+---
+name: cf-splitting-detail
+
+# Backup: Causal-Forest Splitting Algorithm
+
+For each candidate split $(j, c)$ on covariate $j$ at threshold $c$, define left/right child sets.
+
+**Vanilla regression-tree criterion:** maximize variance of the *outcome mean* across the two children — i.e., split where $Y$ differs most.
+
+**Causal-forest criterion** (Athey, Tibshirani & Wager 2019): maximize the **heterogeneity of the treatment effect** across children:
+
+$$\Delta(j, c) = n_L \, n_R \, (\hat\tau_L - \hat\tau_R)^2 / n$$
+
+where $\hat\tau_L, \hat\tau_R$ are local treatment-effect estimates inside each child. The `grf` implementation uses a fast gradient-based approximation rather than evaluating $\hat\tau$ exactly at every candidate split.
+
+.highlight-box[
+**Honesty:** within a tree, sample-splitting separates the data used to *grow* the tree from the data used to *estimate $\hat\tau$ inside leaves*. Without this, the same noise that drove the split would inflate the estimated effect inside the leaf — exactly the over-fit that vanilla trees suffer.
+]
+
+<a href="#causal-forest-how-it-works" class="nav-btn">← back</a>
+
+---
+name: mSPRT-detail
+
+# Backup: mSPRT — Always-Valid Inference
+
+The mSPRT (mixture sequential probability ratio test) constructs a *confidence sequence* $\{(L_t, U_t)\}$ such that:
+
+$$P\!\left(\theta \in (L_t, U_t)\;\;\forall\, t\right) \ge 1 - \alpha$$
+
+The interval is *uniformly* valid — you can stop at any time.
+
+The construction (Howard et al. 2021): for a Gaussian outcome with variance $\sigma^2$, the running CI for $\theta = E[X]$ is
+
+$$\hat\theta_t \pm \sigma \sqrt{\frac{2 \log(1/\alpha) + \log(1 + t \rho^2)}{t \rho^2}}$$
+
+for a chosen mixing scale $\rho$. The CI shrinks like $\sqrt{(\log t) / t}$ — slightly slower than fixed-$n$ $\sqrt{1/t}$, the price of always-valid coverage.
+
+.blue-box[
+**Used in industry by:** Optimizely (mSPRT), Microsoft (group-sequential + mSPRT), Netflix (sequential testing platform).
+]
+
+<a href="#sequential-testing-in-one-slide" class="nav-btn">← back</a>

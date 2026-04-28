@@ -23,7 +23,7 @@ academic research.
 | **5** | [Analyzing Experiments](module-05/) ([slides](https://fhoces.github.io/experimentation-refresher/module-05/slides.html)) | Regression adjustment, CUPED, ITT vs LATE, PAPs | Covariate adjustment for driver experiments |
 | 6 | Multiple Testing & Subgroups | Bonferroni, BH, pre-specified subgroups, forking paths | Testing multiple ad creatives |
 | **7** | [External Validity](module-07/) ([slides](https://fhoces.github.io/experimentation-refresher/module-07/slides.html)) | Site selection, transportability, temporal validity | Cross-city generalization |
-| 8 | Advanced Topics | Synthetic control, bandits, sequential testing, DiD | Feature rollout and adaptive experiments |
+| **8** | [Beyond the A/B Test](module-08/) ([slides](https://fhoces.github.io/experimentation-refresher/module-08/slides.html)) | Modern DiD (Goodman-Bacon, CS, Honest DiD), synthetic control / SDID, causal forests for HTE | Staggered zone-notification rollout; one-city policy change |
 
 ## Structure
 
