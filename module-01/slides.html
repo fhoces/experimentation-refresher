@@ -135,6 +135,45 @@ Even though individual effects are unobservable, we can estimate **averages**:
 ]
 
 ---
+name: ignorability-main
+
+# Ignorability: The Assumption That Substitutes for Randomization
+
+When we *can't* randomize, what assumption substitutes for it?
+
+--
+
+.pull-left[
+**Ignorability** (a.k.a. **unconfoundedness**, **CIA**, **selection on observables**):
+
+`$$\big( Y(0),\, Y(1) \big) \;\perp\!\!\!\perp\; D \,\big|\, X$$`
+
+Treatment assignment is independent of potential outcomes, conditional on `\(X\)`.
+
+**With overlap** ( `\(0 &lt; P(D=1\mid X) &lt; 1\)` on the support of `\(X\)` ), this is enough to identify the ATE:
+
+`$$\tau \;=\; \mathbb{E}_X\!\big[\, \mathbb{E}[Y \mid D=1, X] - \mathbb{E}[Y \mid D=0, X] \,\big]$$`
+]
+
+.pull-right[
+.small[
+**Three regimes:**
+
+- **Randomization:** `\(D\)` is independent of *everything* by design ⇒ ignorability holds with `\(X = \emptyset\)`. Selection bias is mechanically zero.
+- **Selection on observables:** ignorability holds *given `\(X\)`*. Matching, regression adjustment, IPW all rest on this — and are only as good as `\(X\)`.
+- **Selection on unobservables:** confounders are missing from `\(X\)` ⇒ ignorability fails ⇒ ATE is not point-identified. Reach for IV, RDD, DiD, or sensitivity bounds.
+]
+]
+
+--
+
+.small[
+**Why this matters here.** The selection-bias decomposition on the next slide shows what *fails* when ignorability fails. The notification example violates it — driver experience determines both `\(D\)` and `\(Y(0)\)` — and we don't observe experience perfectly.
+]
+
+&lt;a href="#ignorability-formal" class="btn-link"&gt;formal statement →&lt;/a&gt;
+
+---
 name: selection-decomp
 
 # Selection Bias: The Decomposition
@@ -491,6 +530,46 @@ Add and subtract `\(E[Y(0) \mid D=1]\)`:
 Under randomization, `\(E[Y(0) \mid D=1] = E[Y(0) \mid D=0]\)`, so selection bias = 0 and ATT = ATE.
 
 &lt;a href="#selection-decomp" class="btn-link"&gt;← back&lt;/a&gt;
+
+---
+name: ignorability-formal
+
+# Backup: Ignorability — Formal Statement and ATE Identification
+
+.small[
+**Setup.** Each unit `\(i\)` has potential outcomes `\(Y_i(0), Y_i(1)\)`, observed treatment `\(D_i \in \{0,1\}\)`, observed covariates `\(X_i\)`, and observed outcome
+`$$Y_i = D_i Y_i(1) + (1-D_i) Y_i(0) \quad \text{(consistency / SUTVA component).}$$`
+
+**Strong ignorability** (Rosenbaum &amp; Rubin, 1983) bundles two conditions:
+
+1. **Conditional independence (CIA):** `\(\;\big(Y(0), Y(1)\big) \perp\!\!\!\perp D \mid X\)`
+2. **Overlap (positivity):** `\(\;0 &lt; P(D=1 \mid X = x) &lt; 1\;\)` for all `\(x\)` in the support of `\(X\)`.
+]
+
+--
+
+.small[
+**Identification of the ATE.** Under CIA + overlap:
+$$
+`\begin{aligned}
+\mathbb{E}[Y \mid D=1, X=x] &amp;= \mathbb{E}[Y(1) \mid D=1, X=x] &amp;&amp; \text{(consistency)} \\
+&amp;= \mathbb{E}[Y(1) \mid X=x] &amp;&amp; \text{(CIA).}
+\end{aligned}`
+$$
+
+Symmetric for `\(D=0\)`. Subtracting and integrating over `\(X\)`:
+`$$\text{ATE} \;\equiv\; \mathbb{E}[Y(1) - Y(0)] \;=\; \mathbb{E}_X\!\big[\,\mathbb{E}[Y \mid D=1, X] - \mathbb{E}[Y \mid D=0, X]\,\big].$$`
+
+The selection-bias term `\(\mathbb{E}[Y(0) \mid D=1] - \mathbb{E}[Y(0) \mid D=0]\)` collapses *within each `\(X\)`-cell*: conditional on `\(X\)`, the treated and control groups are exchangeable on `\(Y(0)\)`.
+]
+
+--
+
+.small[
+**What randomization buys you.** Randomization makes `\(D\)` independent of *all* covariates — observed and unobserved — so CIA holds with `\(X = \emptyset\)`. We never have to enumerate the confounders. Every other identification strategy (matching, regression, IPW, DiD, IV, RDD, synthetic control) substitutes a weaker, stated assumption for the design-based guarantee. Ignorability is the most common substitute — and the hardest to defend with thin observed covariates.
+]
+
+&lt;a href="#ignorability-main" class="btn-link"&gt;← back&lt;/a&gt;
     </textarea>
 <style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
 <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
