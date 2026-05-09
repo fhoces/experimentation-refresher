@@ -4,8 +4,10 @@
 
 You know from Module 2 that SUTVA violations bias the naive ATE. This module
 covers the design solutions. Key references: Imbens & Rubin Ch. 22-24,
-Baird et al. (2018) on cluster randomization, Bajari et al. (2023) on
-switchback designs, and Kohavi et al. (2020) on marketplace experiments.
+Baird et al. (2018) on cluster randomization, Bojinov & Shephard (2019,
+JASA) and Bojinov, Simchi-Levi & Zhao (2023, Mgmt Sci) on switchback
+designs, Bajari et al. (2023) on multiple-randomization designs, and
+Kohavi et al. (2020) on marketplace experiments.
 
 ### The Core Tradeoff
 
@@ -44,6 +46,15 @@ interference is weak.
 
 **Risks:** carryover effects (treatment in period $t$ affects outcomes in
 period $t+1$). Requires "burn-in" periods between switches.
+
+**Choosing the period length.** Short blocks suffer carryover bias (many
+transitions); long blocks waste statistical efficiency (fewer effectively
+independent assignments under block-clustered SE). Under Markov-1 carryover
+$\delta$, naive bias is $\delta/(2L)$ and block-clustered variance is
+$\propto L/(CT)$, so the MSE-optimal block length scales as $L^{*} \propto
+(\delta^{2} CT / \sigma^{2})^{1/3}$. Bojinov, Simchi-Levi & Zhao (2023) give
+the formal characterization and an implementable scheme. Pre-estimate
+$\delta$ from a pre-period A/A test and cluster SE at the block.
 
 ### Two-Sided Marketplace Designs
 

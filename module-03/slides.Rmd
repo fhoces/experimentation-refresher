@@ -509,6 +509,52 @@ bind_rows(
 
 ---
 
+# Switchback: Choosing the Period Length
+
+The carryover slide showed the bias when periods are short. So why not just use very long blocks (one switch per week)?
+
+--
+
+.pull-left[
+.small[
+**The trade-off:**
+
+- **Short blocks (small $L$):** many transitions per unit time → carryover bias dominates. Bias scales as $\delta / L$.
+- **Long blocks (large $L$):** within-block obs are perfectly correlated in $D$ → fewer effectively independent assignments. Block-clustered variance scales as $L / (CT)$.
+
+**MSE has an interior minimum** at $L^{*} \propto (\delta^{2} CT / \sigma^{2})^{1/3}$. Bojinov, Simchi-Levi & Zhao (2023, *Mgmt Sci*) characterize the MSE-optimal switching design under Markov carryover and give an implementable block-randomized scheme.
+]
+]
+
+.pull-right[
+```{r block-tradeoff, echo=FALSE, fig.height=4.2}
+tibble(L = seq(1, 60, length.out = 200)) |>
+  mutate(`Bias squared` = 0.0025 / L^2,
+         Variance       = 0.00012 * L,
+         MSE            = `Bias squared` + Variance) |>
+  pivot_longer(-L, names_to = "component") |>
+  ggplot(aes(L, value, color = component)) +
+  geom_line(linewidth = 1) +
+  geom_vline(xintercept = (2 * 0.0025 / 0.00012)^(1/3),
+             linetype = "dashed", alpha = 0.5) +
+  scale_color_manual(values = c("steelblue", "firebrick", "darkorange")) +
+  labs(title = "Stylized MSE vs block length",
+       subtitle = "Interior minimum where carryover bias balances variance",
+       x = "Block length L (periods)", y = "Component", color = "") +
+  theme(legend.position = "top")
+```
+]
+
+--
+
+.small[
+**Practical defaults at marketplace scale:** 30-min to 4-hour blocks for matching/pricing; daily for slower outcomes. Pair with a short washout window after each switch and use *block-clustered standard errors* — naive FE SE understates variance.
+]
+
+<a href="#switchback-optimal" class="nav-btn">optimal-design sketch</a>
+
+---
+
 # Two-Sided Marketplace Designs
 
 In a ride-sharing experiment, you can randomize **riders** instead of **drivers**:
@@ -1198,6 +1244,33 @@ $$n_{eff,\,cl} \;\approx\; \frac{\sigma^2_{tot}}{\sigma_\mu^2}\cdot\frac{C}{4} \
 n_{eff,\,sb} \;\approx\; \frac{\sigma^2_{tot}}{\sigma_\varepsilon^2}\cdot\frac{CT}{4} \;\sim\; O(C \cdot T)$$
 
 Switchback gains a factor of $T$ when $\sigma_\mu^2$ is non-trivial (high ICC). With carryover, $\sigma_\varepsilon^2$ is replaced by an inflated effective error and the ratio shrinks toward 1.
+]
+
+<a href="#switchback-strengths" class="nav-btn-br">← back</a>
+
+---
+name: switchback-optimal
+
+# Backup: Switchback MSE-Optimal Block Length
+
+.small[
+**Setup.** $C$ cities, $T$ periods each, block length $L$, total assignments per city $= T/L$. Markov-1 carryover model:
+$$Y_{ct} = \mu_c + \gamma_t + \tau D_{ct} + \delta D_{c,t-1} + \varepsilon_{ct}, \qquad \varepsilon_{ct} \overset{iid}{\sim} (0, \sigma^2)$$
+
+**Bias.** Under block-randomized $D_{ct}$, the fraction of $D=0$ periods that follow a $D=1$ period is $\approx 1/(2L)$ — only the first period of each $D=0$ block can be a transition, half of which follow $D=1$. The naive estimator inherits a downward shift:
+$$E[\hat\tau] \;\approx\; \tau - \frac{\delta}{2L} \quad\Longrightarrow\quad \text{Bias}^{2} \;\propto\; \delta^{2}/L^{2}$$
+
+**Variance.** Within a block of length $L$, the $L$ observations share the same assignment, so they contribute one independent treatment-decision rather than $L$. With block-clustered SE:
+$$\text{Var}(\hat\tau) \;\approx\; \frac{4\sigma^{2} L}{CT} \quad\Longrightarrow\quad \text{Variance} \;\propto\; L / (CT)$$
+
+**MSE-optimal block length.** Minimize $\text{MSE}(L) = a/L^{2} + bL$ where $a = \delta^{2}/4$ and $b = 4\sigma^{2}/(CT)$:
+$$L^{*} \;=\; \left(\frac{2a}{b}\right)^{1/3} \;\propto\; \left(\frac{\delta^{2} \cdot CT}{\sigma^{2}}\right)^{1/3}$$
+]
+
+--
+
+.small[
+**Implications.** Larger carryover $\delta$ → longer blocks. More periods $T$ or cities $C$ → longer blocks (variance scales away faster than bias). Higher noise $\sigma^{2}$ → shorter blocks. **Bojinov-Simchi-Levi-Zhao (2023)** prove a related minimax-MSE result for the general switching-design problem and provide a carryover-corrected implementable scheme. In practice: pre-estimate $\delta$ from a pre-period A/A test, plug into $L^{*}$, and cluster SE at the block.
 ]
 
 <a href="#switchback-strengths" class="nav-btn-br">← back</a>
