@@ -38,6 +38,19 @@ output:
   font-size: 0.75em;
 }
 .btn-link:hover { background: #0d47a1; }
+.nav-btn-br {
+  position: absolute;
+  bottom: 12px;
+  right: 70px;
+  font-size: 11px;
+  background: #e8eaf6;
+  padding: 2px 8px;
+  border-radius: 3px;
+  z-index: 100;
+  text-decoration: none;
+  color: #1a237e;
+}
+.nav-btn-br:hover { background: #c5cae9; }
 .tight-slide { font-size: 18px !important; }
 ```
 
@@ -604,7 +617,7 @@ $$= \underbrace{E[Y(1) \mid D=1] - E[Y(0) \mid D=1]}_{\text{ATT}} + \underbrace{
 
 Under randomization, $E[Y(0) \mid D=1] = E[Y(0) \mid D=0]$, so selection bias = 0 and ATT = ATE.
 
-<a href="#selection-decomp" class="btn-link">← back</a>
+<a href="#selection-decomp" class="nav-btn-br">← back</a>
 
 ---
 name: ignorability-formal
@@ -644,4 +657,4 @@ The selection-bias term $\mathbb{E}[Y(0) \mid D=1] - \mathbb{E}[Y(0) \mid D=0]$ 
 **What randomization buys you.** Randomization makes $D$ independent of *all* covariates — observed and unobserved — so CIA holds with $X = \emptyset$. We never have to enumerate the confounders. Every other identification strategy (matching, regression, IPW, DiD, IV, RDD, synthetic control) substitutes a weaker, stated assumption for the design-based guarantee. Ignorability is the most common substitute — and the hardest to defend with thin observed covariates.
 ]
 
-<a href="#ignorability-main" class="btn-link">← back</a>
+<a href="#ignorability-main" class="nav-btn-br">← back</a>
