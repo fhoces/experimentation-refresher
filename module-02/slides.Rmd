@@ -41,6 +41,19 @@ output:
   color: #1a237e;
 }
 .nav-btn:hover { background: #c5cae9; }
+.nav-btn-br {
+  position: absolute;
+  bottom: 12px;
+  right: 70px;
+  font-size: 11px;
+  background: #e8eaf6;
+  padding: 2px 8px;
+  border-radius: 3px;
+  z-index: 100;
+  text-decoration: none;
+  color: #1a237e;
+}
+.nav-btn-br:hover { background: #c5cae9; }
 ```
 
 ```{r setup, include=FALSE}
@@ -612,6 +625,43 @@ If treated outcomes vary with treatment saturation, SUTVA is violated. The treat
 ]
 
 ---
+name: estimands-main
+
+# Estimands Under Interference
+
+When SUTVA breaks, "the treatment effect" splits into multiple distinct causal quantities. The right one depends on the policy question.
+
+.pull-left[
+.small[
+**Direct effect (DE)** — treat $i$, hold others at control.
+$$Y_i(D_i{=}1, \mathbf{D}_{-i}{=}\mathbf{0}) - Y_i(D_i{=}0, \mathbf{D}_{-i}{=}\mathbf{0})$$
+
+**Spillover / indirect effect (SE)** — treat *others*, leave $i$ alone.
+$$Y_i(0, \mathbf{D}_{-i}{=}\mathbf{z}) - Y_i(0, \mathbf{D}_{-i}{=}\mathbf{0})$$
+
+**Total effect (TE)** — treat $i$ AND everyone else, vs no one.
+$$Y_i(1, \mathbf{1}_{-i}) - Y_i(0, \mathbf{0}_{-i}) \;\approx\; \text{DE} + \text{SE}(\mathbf{1})$$
+]
+]
+
+.pull-right[
+.small[
+**Total Treatment Effect (TTE) / GATE** — the *policy-relevant* estimand:
+$$\text{TTE} \;=\; \mathbb{E}[Y_i(\mathbf{1})] - \mathbb{E}[Y_i(\mathbf{0})]$$
+
+"What changes when everyone gets the treatment vs. no one?" — the comparison your PM cares about.
+]
+
+.highlight-box[
+.small[
+**Key insight.** The naive A/B estimator [you saw biased earlier](#sim-main) doesn't equal *any* of these. With marketplace crowd-out it's a biased blend of DE and SE — typically **overstates** the policy effect. Switchback and full cluster-randomized designs target TTE directly because they create near-$\mathbf{1}$ and near-$\mathbf{0}$ exposure regimes.
+]
+]
+]
+
+<a href="#estimands-formal" class="nav-btn">formal definitions</a>
+
+---
 
 # What Can We Do About It?
 
@@ -776,3 +826,40 @@ The gap depends on how much $p$ moves and how sensitive outcomes are to $p$:
 $$\hat{\tau}_{PE} - \tau_{GE}(1) = \underbrace{(p_0 - p(1))}_{\text{price change}} \times \underbrace{\frac{\partial}{\partial p}[E[Y_i(1,p)] - E[Y_i(0,p)]]}_{\text{differential price sensitivity}}$$
 
 This is a first-order approximation. In practice, you often cannot sign this without structural modeling.
+
+---
+name: estimands-formal
+
+# Backup: Estimands Under Interference — Formal Definitions
+
+.small[
+**Setup.** Each unit $i \in \{1,\ldots,n\}$ has potential outcomes indexed by the *full assignment vector* $\mathbf{d} \in \{0,1\}^n$: $Y_i(\mathbf{d})$. SUTVA was the special case where $Y_i$ depended only on $d_i$. Now we let it depend on the rest of $\mathbf{d}$.
+
+**Three classes of unit-level effect** (Hudgens & Halloran 2008, *JASA*; Aronow & Samii 2017):
+
+| Estimand | Compares | Question |
+|---|---|---|
+| Direct $\text{DE}_i$ | $Y_i(1, \mathbf{0}_{-i}) - Y_i(0, \mathbf{0}_{-i})$ | What if I treat just $i$? |
+| Spillover $\text{SE}_i(\mathbf{z})$ | $Y_i(0, \mathbf{z}_{-i}) - Y_i(0, \mathbf{0}_{-i})$ | What if I treat others, not $i$? |
+| Total $\text{TE}_i$ | $Y_i(1, \mathbf{1}_{-i}) - Y_i(0, \mathbf{0}_{-i})$ | What if I treat everyone? |
+]
+
+--
+
+.small[
+**Population averages — what to call them:**
+
+- **ADE** (avg direct effect at exposure $\mathbf{z}$): $\;\mathbb{E}[Y_i(1, \mathbf{z}_{-i}) - Y_i(0, \mathbf{z}_{-i})]$
+- **ASE** (avg spillover at $\mathbf{z}$): $\;\mathbb{E}[Y_i(0, \mathbf{z}_{-i}) - Y_i(0, \mathbf{0}_{-i})]$
+- **GATE / TTE** (global / total): $\;\mathbb{E}[Y_i(\mathbf{1})] - \mathbb{E}[Y_i(\mathbf{0})]$ — the policy comparison
+
+**TTE is what marketplace interviewers care about.** "Should we ship this to all of Uber?" is a TTE question, not a DE question. A switchback or full cluster-randomized design (treat-all vs treat-none periods/clusters) targets TTE *directly*; a partial-rollout individual A/B test does not.
+]
+
+--
+
+.small[
+**Identification of TTE under partial rollout.** With $n_T$ treated and $n_C$ control units at roughly $50\%$ each, the simple difference $\hat\mu(1) - \hat\mu(0)$ estimates *neither* DE, SE, nor TTE — both group means are taken under the *same* exposure profile (~half treated). To recover TTE without all-or-nothing rollouts you need either: (a) a parametric exposure model (Aronow-Samii regression — see [exposure mapping in M3](../module-03/slides.html#spillover-regression)), (b) a switchback or cluster design that creates near-$\mathbf{1}$ and near-$\mathbf{0}$ regimes, or (c) extrapolation from partial-rollout estimates via a saturation curve.
+]
+
+<a href="#estimands-main" class="nav-btn-br">← back</a>
