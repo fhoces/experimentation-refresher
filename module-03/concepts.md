@@ -6,8 +6,10 @@ You know from Module 2 that SUTVA violations bias the naive ATE. This module
 covers the design solutions. Key references: Imbens & Rubin Ch. 22-24,
 Baird et al. (2018) on cluster randomization, Bojinov & Shephard (2019,
 JASA) and Bojinov, Simchi-Levi & Zhao (2023, Mgmt Sci) on switchback
-designs, Bajari et al. (2023) on multiple-randomization designs, and
-Kohavi et al. (2020) on marketplace experiments.
+designs, Bajari et al. (2023) on multiple-randomization designs,
+Aronow & Samii (2017, Annals of Applied Stats) on exposure mappings
+under general interference, and Kohavi et al. (2020) on marketplace
+experiments.
 
 ### The Core Tradeoff
 

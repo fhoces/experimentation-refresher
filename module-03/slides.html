@@ -406,7 +406,7 @@ The first three approaches **contain** interference by design. When you can't â€
 
 .pull-left[
 .small[
-**Idea:** for each unit `\(i\)`, build an exposure measure `\(S_i\)` summarizing how its network neighbors are treated. Include `\(S_i\)` as a covariate; recover the direct effect *and* the spillover jointly.
+**Idea (Aronow &amp; Samii, 2017, *Annals of Applied Stats*):** for each unit `\(i\)`, build an exposure measure `\(S_i\)` summarizing how its network neighbors are treated. Include `\(S_i\)` as a covariate; recover the direct effect *and* the spillover jointly.
 
 For study `\(i\)` with author set `\(A_i\)` (M2's author-nudge experiment), `\(S_{ik} = \sum_{a \in A_i} \sum_{s \neq i} M_{as} T_{sk}\)` counts other studies in arm `\(k\)` that share an author with `\(i\)`.
 
