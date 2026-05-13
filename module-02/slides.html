@@ -370,12 +370,16 @@ When SUTVA breaks, "the treatment effect" splits into multiple distinct causal q
 .small[
 **Direct effect (DE)** — treat `\(i\)`, hold others at control.
 `$$Y_i(D_i{=}1, \mathbf{D}_{-i}{=}\mathbf{0}) - Y_i(D_i{=}0, \mathbf{D}_{-i}{=}\mathbf{0})$$`
+*Ex: notify driver `\(i\)` alone → +5 pp (no crowding).*
 
 **Spillover / indirect effect (SE)** — treat *others*, leave `\(i\)` alone.
 `$$Y_i(0, \mathbf{D}_{-i}{=}\mathbf{z}) - Y_i(0, \mathbf{D}_{-i}{=}\mathbf{0})$$`
+*Ex: notify all but `\(i\)` → −7 pp (others crowd the zone).*
 
 **Total effect (TE)** — treat `\(i\)` AND everyone else, vs no one.
 `$$Y_i(1, \mathbf{1}_{-i}) - Y_i(0, \mathbf{0}_{-i}) \;\approx\; \text{DE} + \text{SE}(\mathbf{1})$$`
+*Ex: notify everyone → +5 − 7 = −2 pp (full rollout).*
+*"≈" because the term Y(1,1) is new — not in DE or SE; equality needs DE to not vary with saturation. See backup for algebra.*
 ]
 ]
 
@@ -389,7 +393,7 @@ When SUTVA breaks, "the treatment effect" splits into multiple distinct causal q
 
 .highlight-box[
 .small[
-**Key insight.** The naive A/B estimator [you saw biased earlier](#sim-main) doesn't equal *any* of these. With marketplace crowd-out it's a biased blend of DE and SE — typically **overstates** the policy effect. Switchback and full cluster-randomized designs target TTE directly because they create near-$\mathbf{1}$ and near-$\mathbf{0}$ exposure regimes.
+**Key insight.** The naive A/B estimator [you saw biased earlier](#sim-main) doesn't equal *any* of these. With marketplace crowd-out it's a biased blend of DE and SE — typically **overstates** the policy effect. Switchback and full cluster-randomized designs target TTE directly because they create near `\(\mathbf{1}\)` and near `\(\mathbf{0}\)` exposure regimes.
 ]
 ]
 ]
@@ -566,7 +570,7 @@ This is a first-order approximation. In practice, you often cannot sign this wit
 ---
 name: estimands-formal
 
-# Backup: Estimands Under Interference — Formal Definitions
+# Backup: Estimands — Per-Unit Definitions and Decomposition
 
 .small[
 **Setup.** Each unit `\(i \in \{1,\ldots,n\}\)` has potential outcomes indexed by the *full assignment vector* `\(\mathbf{d} \in \{0,1\}^n\)`: `\(Y_i(\mathbf{d})\)`. SUTVA was the special case where `\(Y_i\)` depended only on `\(d_i\)`. Now we let it depend on the rest of `\(\mathbf{d}\)`.
@@ -583,22 +587,71 @@ name: estimands-formal
 --
 
 .small[
+**Why TE ≠ DE + SE in general.** Note `\(Y_i(1,\mathbf{1}_{-i})\)` appears in TE but in *neither* DE nor SE. Add and subtract `\(Y_i(0,\mathbf{1}_{-i})\)` inside TE:
+
+`$$\text{TE} = \underbrace{[Y_i(1,\mathbf{1}_{-i}) - Y_i(0,\mathbf{1}_{-i})]}_{\text{DE}(\mathbf{1})\text{ — DE at saturation}} + \underbrace{[Y_i(0,\mathbf{1}_{-i}) - Y_i(0,\mathbf{0}_{-i})]}_{\text{SE}(\mathbf{1})}$$`
+
+So `\(\text{TE} = \text{DE}(\mathbf{1}) + \text{SE}(\mathbf{1})\)` exactly. The main-slide approximation `\(\text{TE} \approx \text{DE} + \text{SE}(\mathbf{1})\)` silently substitutes DE evaluated at others `\(= \mathbf{0}\)` for DE at saturation — exact iff the direct effect doesn't interact with how many others are treated.
+
+**Concrete failure case.** Notification fatigue: when everyone gets the alert, drivers ignore it. DE at `\(\mathbf{0}\)` = +5 pp but DE at `\(\mathbf{1}\)` = +1 pp. Then TE = 1 − 7 = −6 pp, but DE + SE at `\(\mathbf{1}\)` = 5 − 7 = −2 pp — off by 4 pp.
+]
+
+&lt;a href="#estimands-formal-2" class="nav-btn"&gt;next: population averages →&lt;/a&gt;
+&lt;a href="#estimands-main" class="nav-btn-br"&gt;← back to main&lt;/a&gt;
+
+---
+name: estimands-formal-2
+
+# Backup: Estimands — Population Averages and Identification
+
+.small[
 **Population averages — what to call them:**
 
 - **ADE** (avg direct effect at exposure `\(\mathbf{z}\)`): `\(\;\mathbb{E}[Y_i(1, \mathbf{z}_{-i}) - Y_i(0, \mathbf{z}_{-i})]\)`
 - **ASE** (avg spillover at `\(\mathbf{z}\)`): `\(\;\mathbb{E}[Y_i(0, \mathbf{z}_{-i}) - Y_i(0, \mathbf{0}_{-i})]\)`
 - **GATE / TTE** (global / total): `\(\;\mathbb{E}[Y_i(\mathbf{1})] - \mathbb{E}[Y_i(\mathbf{0})]\)` — the policy comparison
 
-**TTE is what marketplace interviewers care about.** "Should we ship this to all of Uber?" is a TTE question, not a DE question. A switchback or full cluster-randomized design (treat-all vs treat-none periods/clusters) targets TTE *directly*; a partial-rollout individual A/B test does not.
+**TTE is what marketplace interviewers care about.** "Should we ship this to all of Uber?" is a TTE question, not a DE question.
 ]
 
 --
 
 .small[
-**Identification of TTE under partial rollout.** With `\(n_T\)` treated and `\(n_C\)` control units at roughly `\(50\%\)` each, the simple difference `\(\hat\mu(1) - \hat\mu(0)\)` estimates *neither* DE, SE, nor TTE — both group means are taken under the *same* exposure profile (~half treated). To recover TTE without all-or-nothing rollouts you need either: (a) a parametric exposure model (Aronow-Samii regression — see [exposure mapping in M3](../module-03/slides.html#spillover-regression)), (b) a switchback or cluster design that creates near-$\mathbf{1}$ and near-$\mathbf{0}$ regimes, or (c) extrapolation from partial-rollout estimates via a saturation curve.
+**Worked example, canonical DGP** (DE = +5 pp; symmetric crowd-out: −7 pp per share treated, on *both* arms):
+
+| Estimand | Counterfactual | Value |
+|---|---|---|
+| `\(\text{ADE}(\mathbf{0}) = \text{ADE}(\mathbf{1})\)` | direct effect at any saturation | **+5 pp** (DE flat here) |
+| `\(\text{ASE}(\mathbf{1})\)` | spillover when everyone else is treated | **−7 pp** |
+| TTE | full rollout vs no rollout | **+5 + (−7) = −2 pp** |
+| Naive 50/50 A/B, `\(\hat\mu(1)-\hat\mu(0)\)` | both arms at saturation 0.5 — spillover cancels | **+5 pp — equals DE, *not* TTE** |
+
+**Crux:** naive A/B reports +5 pp; rollout delivers −2 pp. Next slide: which designs avoid this trap.
 ]
 
-&lt;a href="#estimands-main" class="nav-btn-br"&gt;← back&lt;/a&gt;
+&lt;a href="#estimands-formal-3" class="nav-btn"&gt;next: design → estimand →&lt;/a&gt;
+&lt;a href="#estimands-main" class="nav-btn-br"&gt;← back to main&lt;/a&gt;
+
+---
+name: estimands-formal-3
+
+# Backup: Estimands — Which Design Targets Which?
+
+.small[
+
+| Design | Identifies | Caveat |
+|---|---|---|
+| Individual A/B at partial rollout | Biased blend of DE and SE — *neither* cleanly | Both arms share the same exposure profile (~half treated); marketplace crowd-out usually makes it overstate the policy effect |
+| Cluster A/B (whole cities/markets) | TTE | Only if clusters are big enough to absorb spillovers internally; ICC kills power, so you need many clusters |
+| Switchback (whole periods on/off) | TTE | Carryover bias if washout windows are too short; trades cross-section for time-series independence |
+| Saturation design (vary treated *fraction* across markets) | `\(\text{ADE}(\mathbf{z})\)` and `\(\text{ASE}(\mathbf{z})\)` as curves over `\(z\)` | Lets you trace the spillover curve; needs many markets at varied saturations — see [exposure mapping in M3](../module-03/slides.html#spillover-regression) |
+| Two-sided (randomize one side, measure the other) | DE for the randomized side + partial spillover signal | Cross-side spillover identification leans on structural assumptions |
+
+**Interview shortcut.** A naive partial-rollout A/B identifies neither DE nor TTE. If the question is "should we ship this to everyone," you need cluster, switchback, or a saturation curve.
+]
+
+&lt;a href="#estimands-formal-2" class="nav-btn"&gt;← prev: pop. averages&lt;/a&gt;
+&lt;a href="#estimands-main" class="nav-btn-br"&gt;← back to main&lt;/a&gt;
     </textarea>
 <style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
 <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
