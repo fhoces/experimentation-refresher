@@ -743,6 +743,24 @@ class: center, middle, inverse
 ]
 
 ---
+name: marketplace-matrix
+
+# Marketplace Pros/Cons: AB / Switchback / DiD / SC
+
+.small[
+Each method evaluated through the **driver-rider network** lens (M2). "Failure mode" gives the *sign* of the bias and the mechanism.
+
+| Method | Marketplace pro | Marketplace con | Concrete failure mode |
+|---|---|---|---|
+| **Individual A/B** | Cheap; clean identification *if* SUTVA held | Both arms share the same exposure profile → biased blend of DE and SE | Naive 50/50 recovers DE, *not* TTE (see [M2 worked example](../module-02/slides.html#estimands-formal-2)) — [more](#ab-interference-detail) |
+| **Switchback** | Treat-all vs treat-none periods → targets **TTE directly** | Carryover; demands homogeneous time effects | Driver positioning persists across switches; OFF period isn't truly $\mathbf{0}$ → bias toward zero — [more](#switchback-interference-detail) |
+| **DiD (CS / staggered)** | Uses observational rollout data; matches how features actually launch | Parallel trends ≈ "no cross-unit spillover from treated to controls" — strong in marketplaces | Drivers reposition across geo borders; control trend bends down → DiD **overstates** TTE — [more](#did-interference-detail) |
+| **Synthetic control** | Targets one-treated-city rollout cleanly | Donor pool assumed unaffected by treatment | Treated city pulls supply from donor neighbors; synthetic counterfactual bends *toward* treated trend → SC **understates** TTE — [more](#sc-interference-detail) |
+
+**Pattern.** Methods anchored on *control units* (DiD, SC) bias when treatment leaks into the control set. Methods comparing *exposure profiles directly* (switchback, full-saturation cluster A/B) target TTE but pay other costs.
+]
+
+---
 
 # Going Deeper
 
@@ -1014,3 +1032,91 @@ for a chosen mixing scale $\rho$. The CI shrinks like $\sqrt{(\log t) / t}$ — 
 ]
 
 <a href="#seq-main" class="nav-btn">← back</a>
+
+---
+name: ab-interference-detail
+
+# Backup: Individual A/B Under Driver-Rider Interference
+
+.small[
+**Setup.** 50% of drivers in a city get a zone-notification feature; the other 50% don't. Both arms operate in the same zones simultaneously.
+
+**The hidden bias.** Treated drivers rush the zone → crowding pushes treated accept-rate *down*. Control drivers in the same zone benefit from less competition → control accept-rate goes *up*. The naive estimator $\hat\mu(1) - \hat\mu(0)$ subtracts a *contaminated control* from a *deflated treated*.
+
+**The killer.** In the canonical DGP with symmetric crowd-out, at saturation 0.5 the naive estimator equals the **direct effect**, not TTE. The policy-relevant quantity (TTE) can have the *opposite sign* from what the A/B reports — a +5 pp A/B can mask a −2 pp rollout. (Worked example: [M2 §29](../module-02/slides.html#estimands-formal-2).)
+
+**What to do.**
+- **Cluster A/B at the geographic level** (whole cities) — if clusters are large enough to contain spillovers, the within-cluster estimate approaches TTE.
+- **Switchback** — treat-all vs treat-none periods alternate; targets TTE directly.
+- **Saturation experiment** — randomize the *fraction* treated across markets; trace the TTE/ADE curve and extrapolate to 100%.
+- **Cluster-robust SE alone doesn't help.** It fixes variance, not bias. Don't conflate the two.
+]
+
+<a href="#marketplace-matrix" class="nav-btn">← back to matrix</a>
+
+---
+name: switchback-interference-detail
+
+# Backup: Switchback Under Driver-Rider Interference
+
+.small[
+**Strength.** Whole-city ON/OFF periods → at any given moment every driver sees the *same* regime → the comparison is between a near $\mathbf{1}$ and a near $\mathbf{0}$ exposure regime → the estimator targets TTE directly. No treated-vs-control crowding within a period.
+
+**Network-side weakness — physical carryover.** Driver positioning is *physical*. A treated period concentrates drivers in zone X; when the period flips OFF, those drivers don't teleport home. The first 5–10 minutes of OFF are still partially treated.
+
+**Sign of the bias.** Carryover makes OFF periods look more like ON periods → the ON−OFF gap shrinks → switchback **underestimates** TTE in absolute value (biases toward zero).
+
+**What to do.**
+- **Washout windows.** Drop the first τ minutes after each switch from analysis. τ = 1× the median driver repositioning time is a good starting heuristic.
+- **Period-length tuning.** Too short → high carryover bias. Too long → too few independent comparisons (reduces effective $n$). Bojinov et al. (2023) derive the optimal period length — see [switchback-optimal in M3](../module-03/slides.html#switchback-optimal).
+- **Asymmetric carryover.** If ON→OFF and OFF→ON have different lag profiles (e.g., features that trigger habit formation), use asymmetric washouts.
+
+**Fundamental limitation.** Switchback gives you TTE as a single number. It can't decompose into DE and SE — for that you need a saturation design.
+]
+
+<a href="#marketplace-matrix" class="nav-btn">← back to matrix</a>
+
+---
+name: did-interference-detail
+
+# Backup: DiD Under Driver-Rider Interference
+
+.small[
+**Setup.** Uber turns on a routing-algorithm change in San Francisco at $t^*$, leaves Oakland untouched. Standard 2×2 DiD:
+
+$$\text{DiD} = (\bar Y_{SF, post} - \bar Y_{SF, pre}) - (\bar Y_{Oak, post} - \bar Y_{Oak, pre})$$
+
+**The hidden assumption.** Parallel trends says: *absent treatment*, $Y_{SF}$ and $Y_{Oak}$ would have moved in parallel. But "absent treatment" really means *no treatment anywhere in the network*. If the routing change in SF reroutes drivers across the bay bridge, Oakland is **not** at the no-treatment counterfactual — it loses supply.
+
+**Sign of the bias.** Spillover *from* SF *into* Oakland → Oakland trend bends DOWN → control rises *less* than it should → DiD = (treated rise) − (control rise) gets *bigger* → **overestimates** the SF-only treatment effect. The same logic applies to staggered DiD when treated cities pull from not-yet-treated controls.
+
+**What to do.**
+- **Distance-based donor exclusion.** Drop control geos within a buffer radius of treated; use only "isolated" controls.
+- **Saturation-aware adjustment.** Estimate the spillover function from cross-border movement data and subtract the implied control-unit shift.
+- **HonestDiD with a spillover-driven $\bar M$.** Set the bound on parallel-trends violation to the worst-case implied by your spillover model — see [honest-did-detail](#honest-did-detail).
+- **Switch to switchback or cluster A/B if randomization is feasible.** They target TTE directly without the parallel-trends-equals-no-spillover leap.
+]
+
+<a href="#marketplace-matrix" class="nav-btn">← back to matrix</a>
+
+---
+name: sc-interference-detail
+
+# Backup: Synthetic Control Under Driver-Rider Interference
+
+.small[
+**Setup.** Uber rolls out a new fare structure in **Austin** only; estimates a synthetic Austin from a weighted combination of Houston, Dallas, San Antonio, etc.
+
+**The hidden assumption.** The donor pool is *not* affected by treatment. With a fare change in Austin: drivers near the metro might cross-shop, riders might delay travel, operational adjustments (driver supply hours, vehicle deployment) propagate through Uber's national supply pool. *Houston is no longer at counterfactual.*
+
+**Sign of the bias.** Donor cities lose drivers to Austin (or absorb returning supply) → donor trends adjust → synthetic Austin trends with donor adjustments → counterfactual *underestimates* "Austin if untreated" → SC **understates** the true treatment effect. (Sign flips if spillover *helps* donors — e.g., riders priced out of Austin substitute to Houston.)
+
+**What to do.**
+- **Geographic buffer.** Restrict donors to cities far enough that supply cross-shopping is negligible.
+- **Pre-treatment covariate matching.** Choose donors with similar driver labor markets so spillover impact is balanced (won't eliminate bias but reduces it).
+- **Augmented SC** (Ben-Michael, Feller, Rothstein 2021). The outcome model can absorb part of the spillover.
+- **Explicit spillover model.** Estimate cross-city supply elasticity and adjust the synthetic counterfactual.
+- **Triangulate.** If feasible, validate the SC estimate with a switchback or cluster A/B in a *different* market — divergence flags unmeasured spillover.
+]
+
+<a href="#marketplace-matrix" class="nav-btn">← back to matrix</a>
