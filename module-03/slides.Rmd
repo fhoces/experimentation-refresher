@@ -267,6 +267,7 @@ tibble(
 <a href="#cluster-bias-proof" class="nav-btn">decomposition</a>
 
 ---
+name: design-effect-icc
 
 # Design Effect and ICC
 
@@ -327,6 +328,7 @@ expand_grid(
 <a href="#icc-derivation" class="nav-btn">ICC derivation</a>
 
 ---
+name: bias-variance-sim
 
 # The Bias-Variance Tradeoff: Simulated
 
@@ -383,6 +385,7 @@ tradeoff |>
 ]
 
 ---
+name: switchback-intro
 
 # Switchback Designs
 
@@ -460,6 +463,7 @@ tibble(
 ]
 
 ---
+name: switchback-sim
 
 # Switchback: Simulation
 
@@ -508,48 +512,37 @@ bind_rows(
 <a href="#switchback-dgp" class="nav-btn">DGP code</a>
 
 ---
+name: switchback-period-length
 
 # Switchback: Choosing the Period Length
 
-The carryover slide showed the bias when periods are short. So why not just use very long blocks (one switch per week)?
+The [carryover slide](#switchback-strengths) showed the bias for short periods. So why not very long blocks (one switch per week)?
 
---
-
-.pull-left[
 .small[
-**The trade-off:**
-
-- **Short blocks (small $L$):** many transitions per unit time → carryover bias dominates. Bias scales as $\delta / L$.
-- **Long blocks (large $L$):** within-block obs are perfectly correlated in $D$ → fewer effectively independent assignments. Block-clustered variance scales as $L / (CT)$.
-
-**MSE has an interior minimum** at $L^{*} \propto (\delta^{2} CT / \sigma^{2})^{1/3}$. Bojinov, Simchi-Levi & Zhao (2023, *Mgmt Sci*) characterize the MSE-optimal switching design under Markov carryover and give an implementable block-randomized scheme.
-]
+- **Short blocks** are bad because flipping often means leftover behavior from the previous block contaminates the next one; the shorter the block, the bigger that contamination as a share of "clean" observations. Bias scales as $\delta/L$.
+- **Long blocks** are bad because every period inside one block sees the *same* assignment — they're highly correlated, so contribute roughly *one* effective observation each. Fewer effective comparisons → wider standard errors. Variance scales as $L/(CT)$.
+- **Sweet spot:** bias falls fast (as $1/L^2$); variance creeps up (linear in $L$). The U-shaped MSE has an interior minimum at $L^{*} \propto (\delta^{2} CT / \sigma^{2})^{1/3}$ — Bojinov, Simchi-Levi & Zhao (2023, *Mgmt Sci*). Use *block-clustered SE*; naive FE SE understates variance.
 ]
 
-.pull-right[
-```{r block-tradeoff, echo=FALSE, fig.height=4.2}
+```{r block-tradeoff, echo=FALSE, fig.height=3.4, fig.width=11}
+opt_L <- (2 * 0.0025 / 0.00012)^(1/3)
 tibble(L = seq(1, 60, length.out = 200)) |>
   mutate(`Bias squared` = 0.0025 / L^2,
          Variance       = 0.00012 * L,
          MSE            = `Bias squared` + Variance) |>
   pivot_longer(-L, names_to = "component") |>
   ggplot(aes(L, value, color = component)) +
-  geom_line(linewidth = 1) +
-  geom_vline(xintercept = (2 * 0.0025 / 0.00012)^(1/3),
-             linetype = "dashed", alpha = 0.5) +
+  geom_line(linewidth = 1.2) +
+  geom_vline(xintercept = opt_L, linetype = "dashed", alpha = 0.6) +
+  annotate("text", x = opt_L + 1.2, y = 0.0042,
+           label = paste0("L* ≈ ", round(opt_L, 1)),
+           hjust = 0, size = 4.5, color = "grey25") +
   scale_color_manual(values = c("steelblue", "firebrick", "darkorange")) +
-  labs(title = "Stylized MSE vs block length",
-       subtitle = "Interior minimum where carryover bias balances variance",
-       x = "Block length L (periods)", y = "Component", color = "") +
-  theme(legend.position = "top")
+  labs(title = "MSE = Bias² + Variance, with interior minimum at L*",
+       subtitle = "Short blocks: carryover bias dominates. Long blocks: too few independent assignments.",
+       x = "Block length L (periods)", y = "MSE component", color = "") +
+  theme(legend.position = "top", text = element_text(size = 13))
 ```
-]
-
---
-
-.small[
-**Practical defaults at marketplace scale:** 30-min to 4-hour blocks for matching/pricing; daily for slower outcomes. Pair with a short washout window after each switch and use *block-clustered standard errors* — naive FE SE understates variance.
-]
 
 <a href="#switchback-optimal" class="nav-btn">optimal-design sketch</a>
 
@@ -558,6 +551,10 @@ tibble(L = seq(1, 60, length.out = 200)) |>
 # Two-Sided Marketplace Designs
 
 In a ride-sharing experiment, you can randomize **riders** instead of **drivers**:
+
+.small[
+**A note on the name.** "Two-sided" refers to the *marketplace* (riders + drivers), not the randomization. The basic version randomizes one side and *measures* on the other — the two-sidedness is what lets cross-side outcomes carry the causal signal. A stricter usage (Bajari et al. 2021, *Multiple Randomization Designs*) reserves "two-sided experiment" for designs that randomize **both** sides cross-classified, which can separately identify direct + spillover effects on each side.
+]
 
 --
 
@@ -587,6 +584,7 @@ In a ride-sharing experiment, you can randomize **riders** instead of **drivers*
 ]
 
 ---
+name: geo-experiments
 
 # Geo Experiments
 
@@ -720,6 +718,7 @@ ggplot() +
 ```
 
 ---
+name: spillover-exposure-mapping
 
 # Approach 4: Model the Spillover (Exposure Mapping)
 
@@ -781,6 +780,7 @@ Study 2 shares author *b* with study 1 and *e* with study 3 ⇒ $S_2 = 1$, $P_2 
 <a href="#spillover-regression" class="nav-btn">regression & validity</a>
 
 ---
+name: spillover-simulation
 
 # Approach 4: Simulation
 
@@ -886,6 +886,7 @@ A ride-sharing company wants to test whether the **zone-notification** feature l
 ]
 
 ---
+name: switchback-application
 
 # Application: Switchback for Zone Notifications
 
@@ -912,6 +913,7 @@ A ride-sharing company wants to test whether the **zone-notification** feature l
 ]
 
 ---
+name: geo-incrementality-app
 
 # Application: Geo Incrementality for Online Ads
 
@@ -940,6 +942,7 @@ An e-commerce company wants to measure whether their TV ad campaign drives sales
 ]
 
 ---
+name: choosing-design
 
 # Choosing the Right Design
 
@@ -961,6 +964,7 @@ An e-commerce company wants to measure whether their TV ad campaign drives sales
 4. **Is there carryover/leakage between clusters?** If so, switchback may be risky.
 
 ---
+name: bias-variance-summary
 
 # Summary of the Bias-Variance Tradeoff
 
@@ -985,6 +989,155 @@ ggplot(tradeoff_summary, aes(variance, bias, label = design)) +
        y = "Bias (overstates policy effect)") +
   theme(panel.grid.minor = element_blank())
 ```
+
+---
+name: design-walkthrough-prompt
+
+# Worked Example: Designing the Zone-Nudge Experiment
+
+.small[
+**Interview prompt.** *"Uber's product team wants to ship a new in-app feature that nudges drivers toward high-demand zones with a tappable card. They want experimental evidence before launch. Design the experiment."*
+
+**First moves before designing.** Three questions to ask back:
+
+1. **What's the deciding metric?** Driver accept rate, rider wait time, or driver earnings? Affects both the estimator and the minimum detectable effect.
+2. **What's the scope of rollout if it works?** Single city, all US, both rider + driver sides? Determines what *estimand* we need (DE for partial test, TTE for ship/no-ship).
+3. **Timeline & budget.** Two weeks vs two months changes the design (switchback vs phased geo).
+
+**Working assumptions for the rest of this chain:** primary metric is **driver accept rate**; ship/no-ship decision for the **whole city**; **2 weeks** of experiment time across **8 cities**.
+
+The design menu (this module): individual A/B → cluster A/B → switchback → geo → two-sided → ego-cluster. We'll walk through each decision.
+]
+
+<a href="#design-walkthrough-estimand" class="nav-btn-br">step 1 →</a>
+
+---
+name: design-walkthrough-estimand
+
+# Step 1 — What's the Estimand?
+
+.small[
+**The decision.** Ship-or-not is a **TTE question**: "what changes when *every* driver in the city sees the nudge vs *no* driver does?"
+
+**Why not the naive A/B effect.** Under marketplace crowd-out (M2), a 50/50 individual A/B at city level gives a biased blend of DE and SE, *not* TTE — typically overstating the policy effect because the treated group's crowding is partly offset by the control group's relief. ([M2 §29 worked example](../module-02/slides.html#estimands-formal-2): canonical DGP gives +5 pp from naive A/B but −2 pp from full rollout.)
+
+**Conclusion.** Estimand = TTE. We need a design that produces near $\mathbf{1}$ and near $\mathbf{0}$ exposure regimes side-by-side.
+]
+
+<a href="#design-walkthrough-prompt" class="nav-btn">← prompt</a>
+<a href="#design-walkthrough-design" class="nav-btn-br">step 2 →</a>
+
+---
+name: design-walkthrough-design
+
+# Step 2 — Pick the Unit of Randomization
+
+.small[
+**Two designs target TTE directly under marketplace interference:**
+
+| Design | When it wins | When it loses |
+|---|---|---|
+| **Cluster A/B** (whole cities) | Outcome cycles slowly (days/weeks). Many cities available. | Outcome cycles fast (within hours). Few cities → ICC-driven power loss. |
+| **Switchback** (whole-city ON/OFF periods) | Outcome cycles fast — driver positioning + accept rate move within minutes. | Long carryover (driver positioning persists across switches → bias). |
+
+**For the zone nudge:** outcome (accept rate) reacts within minutes; we have only 8 cities (limited cluster A/B power). → **Switchback wins.**
+
+**Block length.** Per [M3 §12](../module-03/slides.html#11) (Bojinov MSE-optimal $L^{*} \propto (\delta^2 CT/\sigma^2)^{1/3}$): start with **30-minute blocks**, **5-minute washout** after each switch. Driver positioning roughly resets in 5 min; 30-min blocks balance carryover bias against effective sample.
+]
+
+<a href="#design-walkthrough-estimand" class="nav-btn">← step 1</a>
+<a href="#design-walkthrough-power" class="nav-btn-br">step 3 →</a>
+
+---
+name: design-walkthrough-power
+
+# Step 3 — Power and MDE
+
+.small[
+**Sample size, back of envelope:**
+
+- 8 cities × 14 days × 24 h × 2 blocks/h = **5,376 city-blocks**.
+- Within-city block-cluster correlation in accept rate: assume $\text{ICC} \approx 0.05$ (low — block-level variation dominates).
+- $\sigma$ at baseline accept rate $p = 0.4$: $\sigma = \sqrt{p(1-p)} = 0.49$.
+
+**MDE for power = 0.8, $\alpha = 0.05$ two-sided** (block-clustered SE):
+
+$$\text{MDE} \approx 2.8 \times \sigma \times \sqrt{\frac{\text{DE}_{\text{eff}}}{n_{\text{eff}}}} \approx 0.4 \text{ pp}$$
+
+where $\text{DE}_{\text{eff}}$ is the design effect from block clustering. **0.4 pp** is well below a plausible prior effect (~3 pp from a pilot).
+
+**If MDE were too high:** add cities (more clusters), shorten blocks (more periods, accept more carryover bias), or run longer. M4 has the formal derivation.
+]
+
+<a href="#design-walkthrough-design" class="nav-btn">← step 2</a>
+<a href="#design-walkthrough-pap" class="nav-btn-br">step 4 →</a>
+
+---
+name: design-walkthrough-pap
+
+# Step 4 — Pre-Analysis Plan
+
+.small[
+**Pre-spec before turning the experiment on:**
+
+1. **Primary metric.** Driver accept rate (block × city level). One number, one test, no peeking.
+2. **Guardrails.** Rider wait time (must not increase ≥5%); cancellation rate (must not increase ≥1 pp). Tested separately with Bonferroni-adjusted α.
+3. **Stopping rule.** No interim looks. Analyze at end of pre-specified 14-day window.
+4. **Subgroup analyses (pre-specified, exploratory).** City tier (top-3 vs other 5), driver tenure (≥1y vs <1y), time-of-day (peak vs off-peak). Reported with multiple-testing correction; not used for the ship/no-ship decision.
+5. **Sensitivity analyses.** Drop the first day (driver onboarding to feature); drop the lowest-volume city (donor-pool sensitivity).
+
+**Why this matters.** PAPs prevent garden-of-forking-paths inflation. Most "interesting" subgroup splits found post-hoc are noise.
+]
+
+<a href="#design-walkthrough-power" class="nav-btn">← step 3</a>
+<a href="#design-walkthrough-analysis" class="nav-btn-br">step 5 →</a>
+
+---
+name: design-walkthrough-analysis
+
+# Step 5 — Analysis
+
+.small[
+**Estimator.** Fixed-effects regression at the block × city level:
+
+$$Y_{ct} = \mu_c + \gamma_t + \tau \cdot D_{ct} + \varepsilon_{ct}$$
+
+where $\mu_c$ = city FE, $\gamma_t$ = period (hour-of-day) FE. $\hat\tau$ is the TTE estimate.
+
+**Standard errors.** Block-clustered SE (per [switchback-formal](#switchback-formal)). Naive HC SE understates variance because within-block obs are perfectly correlated in $D$.
+
+**ITT vs LATE.** This rollout is a server-side flag flipped at the city × time level — no driver-side compliance issue. $\text{ITT} = \text{LATE}$.
+
+**Decision rule.** Pre-specified one-sided $z$-test at $\alpha = 0.05$. Ship if $\hat\tau > 0$ AND all guardrail tests pass.
+
+**Robustness checks.** (a) drop first day; (b) split sample by city; (c) re-estimate with 60-min blocks; (d) report median in addition to ATE.
+]
+
+<a href="#design-walkthrough-pap" class="nav-btn">← step 4</a>
+<a href="#design-walkthrough-wrap" class="nav-btn-br">step 6 →</a>
+
+---
+name: design-walkthrough-wrap
+
+# Step 6 — Caveats and What I'd Actually Run
+
+.small[
+**The plan in one paragraph.** *14-day switchback in 8 cities. 30-minute ON/OFF blocks with 5-minute washouts, randomized within-city. Primary metric = driver accept rate; guardrails on rider wait time and cancellations. City + period fixed effects, block-clustered SE. Pre-specified one-sided $\alpha = 0.05$ ship/no-ship test. Reported alongside subgroup heterogeneity for product-team learning.*
+
+**External-validity caveats.**
+
+- **City selection.** 8 cities are the test set; rollout might be 100+ with different demand densities. Use a saturation curve (M3 §16) if cross-city heterogeneity is plausible.
+- **Time-of-year.** A 2-week window may miss seasonal patterns (sports nights, weather shocks). Consider a longer arm or a multi-season repeat.
+- **Driver learning.** Switchback assumes drivers don't learn the schedule. If they do, ON-period effects shrink over time → bias toward zero TTE.
+
+**When NOT to use this design.**
+
+- **Slow-cycling outcome** (e.g., weekly active drivers): use cluster A/B at the city-week level instead.
+- **Very few cities** (<3): switchback's TTE estimate has too few independent units; switch to a structural model.
+- **Carryover suspected to dominate**: run a saturation experiment first to characterize the spillover function before switchback.
+]
+
+<a href="#design-walkthrough-analysis" class="nav-btn">← step 5</a>
 
 ---
 
@@ -1181,30 +1334,31 @@ name: switchback-formal
 
 # Backup: Switchback Estimator
 
-For a switchback design with cities $c = 1, \ldots, C$ and periods $t = 1, \ldots, T$:
+.small[
+**Model.** For a switchback design with cities $c = 1, \ldots, C$ and periods $t = 1, \ldots, T$:
 
 $$Y_{ct} = \mu_c + \gamma_t + \tau \cdot D_{ct} + \delta \cdot D_{c,t-1} + \varepsilon_{ct}$$
 
---
-
-- $\mu_c$: city fixed effect
-- $\gamma_t$: period fixed effect
-- $D_{ct}$: notification indicator for city $c$ at time $t$
-- $\delta$: carryover parameter (ideally $\delta = 0$)
+where $\mu_c$ = city FE, $\gamma_t$ = period FE, $D_{ct}$ = treatment indicator for city $c$ at time $t$, and $\delta$ = carryover parameter (ideally $\delta = 0$).
+]
 
 --
 
-The standard switchback estimator ignores carryover:
+.small[
+**Naive estimator** (ignores carryover):
 
 $$\hat{\tau} = \frac{1}{CT}\sum_{c,t} (2D_{ct} - 1) Y_{ct}$$
+]
 
 --
 
-If $\delta \neq 0$, the estimator is biased:
+.small[
+**Bias under carryover.** If $\delta \neq 0$:
 
 $$E[\hat{\tau}] = \tau + \delta \cdot \text{Corr}(D_{ct}, D_{c,t-1})$$
 
-Under i.i.d. randomization, $\text{Corr}(D_{ct}, D_{c,t-1}) \approx 0$, so the bias is small but not zero in finite samples. Including $D_{c,t-1}$ as a covariate or using burn-in periods mitigates this.
+Under i.i.d. randomization, $\text{Corr}(D_{ct}, D_{c,t-1}) \approx 0$, so the bias is small but nonzero in finite samples. Including $D_{c,t-1}$ as a covariate or using burn-in periods mitigates this.
+]
 
 ---
 name: switchback-effn
