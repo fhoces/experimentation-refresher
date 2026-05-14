@@ -42,11 +42,11 @@ To preview slides without screenshots from the user, render to PDF and read the 
   --headless --disable-gpu --no-sandbox --virtual-time-budget=10000 \
   --print-to-pdf=/tmp/m7.pdf --print-to-pdf-no-header \
   "file:///abs/path/module-NN/slides.html?print-pdf"
-Rscript -e 'png::writePNG(pdftools::pdf_render_page("/tmp/m7.pdf", page = N, dpi = 90), "/tmp/sN.png")'
+Rscript -e 'png::writePNG(pdftools::pdf_render_page("/tmp/m7.pdf", page = N, dpi = 150), "/tmp/sN.png")'
 # then Read /tmp/sN.png
 ```
 
-`?print-pdf` is xaringan's print mode — one slide per PDF page. Use this proactively when debugging overflow/clipping.
+`?print-pdf` is xaringan's print mode — one slide per PDF page. Use this proactively when debugging overflow/clipping. **Use dpi=150**, not the older `dpi=90` — at 90 the image is too small to spot overflow / cut-off content reliably.
 
 ## The running example: zone-notification
 
