@@ -88,6 +88,7 @@ But the true effect **is** 2 percentage points (a 20% relative lift!). With only
 ]
 
 ---
+name: power-definition
 
 # What Is Statistical Power?
 
@@ -124,6 +125,7 @@ ggplot(df_plot) +
 ```
 
 ---
+name: four-knobs
 
 # The Four Knobs
 
@@ -149,6 +151,7 @@ $$n_{\text{per arm}} = \frac{(z_{1-\alpha/2} + z_\beta)^2 \cdot 2\sigma^2}{\delt
 ]
 
 ---
+name: sim-based-power
 
 # Simulation-Based Power Analysis
 
@@ -206,6 +209,7 @@ ggplot(power_results, aes(n_per_arm, power)) +
 You need roughly **5,000-10,000 users per arm** to reliably detect a 2 percentage point lift on a 10% baseline conversion rate.
 
 ---
+name: mde-intro
 
 # Minimum Detectable Effect (MDE)
 
@@ -272,6 +276,7 @@ But what if you want to detect a **0.1pp** lift? That's ~500,000 per arm.
 ]
 
 ---
+name: clustering-problem
 
 # The Clustering Problem
 
@@ -301,6 +306,7 @@ sim_power_cluster <- function(n_clusters, n_per_cluster, effect,
 ```
 
 ---
+name: clustering-kills-power
 
 # Clustering Kills Power
 
@@ -333,6 +339,7 @@ bind_rows(
 ```
 
 ---
+name: design-effect-icc-m4
 
 # The Design Effect and ICC
 
@@ -393,6 +400,7 @@ With only 10 cities per arm, power is low even for a large effect (0.15 SD). You
 ]
 
 ---
+name: more-vs-bigger-clusters
 
 # More Clusters vs. Bigger Clusters
 
@@ -421,6 +429,7 @@ ggplot(configs, aes(n_clusters, power)) +
 ```
 
 ---
+name: covariates-for-power
 
 # Reducing Variance with Pre-Treatment Covariates
 

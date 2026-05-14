@@ -79,6 +79,7 @@ But the true effect **is** 2 percentage points (a 20% relative lift!). With only
 ]
 
 ---
+name: power-definition
 
 # What Is Statistical Power?
 
@@ -91,6 +92,7 @@ But the true effect **is** 2 percentage points (a 20% relative lift!). With only
 &lt;img src="slides_files/figure-html/power-diagram-1.png" style="display: block; margin: auto;" /&gt;
 
 ---
+name: four-knobs
 
 # The Four Knobs
 
@@ -116,6 +118,7 @@ The formula for a two-sample test with equal arms:
 ]
 
 ---
+name: sim-based-power
 
 # Simulation-Based Power Analysis
 
@@ -170,6 +173,7 @@ sim_power(n_per_arm = 5000, effect = 0.02)  # much better
 You need roughly **5,000-10,000 users per arm** to reliably detect a 2 percentage point lift on a 10% baseline conversion rate.
 
 ---
+name: mde-intro
 
 # Minimum Detectable Effect (MDE)
 
@@ -232,6 +236,7 @@ But what if you want to detect a **0.1pp** lift? That's ~500,000 per arm.
 ]
 
 ---
+name: clustering-problem
 
 # The Clustering Problem
 
@@ -262,12 +267,14 @@ sim_power_cluster &lt;- function(n_clusters, n_per_cluster, effect,
 ```
 
 ---
+name: clustering-kills-power
 
 # Clustering Kills Power
 
 &lt;img src="slides_files/figure-html/cluster-comparison-1.png" style="display: block; margin: auto;" /&gt;
 
 ---
+name: design-effect-icc-m4
 
 # The Design Effect and ICC
 
@@ -325,12 +332,14 @@ With only 10 cities per arm, power is low even for a large effect (0.15 SD). You
 ]
 
 ---
+name: more-vs-bigger-clusters
 
 # More Clusters vs. Bigger Clusters
 
 &lt;img src="slides_files/figure-html/more-vs-bigger-1.png" style="display: block; margin: auto;" /&gt;
 
 ---
+name: covariates-for-power
 
 # Reducing Variance with Pre-Treatment Covariates
 
