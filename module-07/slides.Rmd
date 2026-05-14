@@ -216,6 +216,7 @@ tibble(
 ]
 
 ---
+name: hte-key
 
 # Heterogeneous Treatment Effects: The Key
 
@@ -351,6 +352,7 @@ dose_data |>
 ]
 
 ---
+name: temporal-validity
 
 # Temporal Validity: Effects That Decay
 
@@ -474,6 +476,7 @@ ggplot(nl_sites, aes(city_effect, est, color = selected)) +
 ```
 
 ---
+name: external-validity-strategies
 
 # Strategies for Improving External Validity
 
