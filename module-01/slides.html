@@ -103,6 +103,7 @@ The product team looks at the data:
 ...or does it?
 
 ---
+name: fundamental-problem
 
 # The Fundamental Problem
 
@@ -124,6 +125,7 @@ We want to know the **causal effect** of the notification on each driver `\(i\)`
 We only observe **one** potential outcome per driver. The other is the *counterfactual* — it doesn't exist in the data. We can never compute `\(\tau_i\)` directly.
 
 ---
+name: average-effects
 
 # What We *Can* Estimate: Average Effects
 
@@ -250,6 +252,7 @@ rct &lt;- tibble(
 Experience is balanced (by construction). The difference in accept rate is an unbiased estimate of the ATE.
 
 ---
+name: why-randomization-works
 
 # Why Does Randomization Work?
 
@@ -276,6 +279,7 @@ So the simple difference in means equals the ATE:
 ]
 
 ---
+name: randomization-sim
 
 # Simulation: Randomization Works in Expectation
 
@@ -315,6 +319,7 @@ The naive distribution is shifted right — it **overestimates** the effect beca
 ]
 
 ---
+name: ate-att-atu-matters
 
 # ATE vs ATT vs ATU: When It Matters
 

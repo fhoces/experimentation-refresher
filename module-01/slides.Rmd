@@ -119,6 +119,7 @@ drivers |>
 ...or does it?
 
 ---
+name: fundamental-problem
 
 # The Fundamental Problem
 
@@ -140,6 +141,7 @@ $$\tau_i = Y_i(1) - Y_i(0)$$
 We only observe **one** potential outcome per driver. The other is the *counterfactual* — it doesn't exist in the data. We can never compute $\tau_i$ directly.
 
 ---
+name: average-effects
 
 # What We *Can* Estimate: Average Effects
 
@@ -286,6 +288,7 @@ rct |>
 Experience is balanced (by construction). The difference in accept rate is an unbiased estimate of the ATE.
 
 ---
+name: why-randomization-works
 
 # Why Does Randomization Work?
 
@@ -312,6 +315,7 @@ $$E[Y \mid D=1] - E[Y \mid D=0] = E[Y(1)] - E[Y(0)] = \text{ATE}$$
 ]
 
 ---
+name: randomization-sim
 
 # Simulation: Randomization Works in Expectation
 
@@ -413,6 +417,7 @@ tibble(
 ]
 
 ---
+name: ate-att-atu-matters
 
 # ATE vs ATT vs ATU: When It Matters
 
