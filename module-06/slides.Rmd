@@ -91,6 +91,7 @@ ggplot(sim_ads, aes(reorder(creative, -p_value), estimate,
 With 10 tests at $\alpha = 0.05$, the probability of **at least one** false positive is $1 - (1-0.05)^{10} = `r round(1 - 0.95^10, 2)`$.
 
 ---
+name: multiple-comparisons-problem
 
 # The Multiple Comparisons Problem
 
@@ -295,6 +296,7 @@ ad_results |>
 With 10 creatives tested, raw p-values can mislead. BH helps find the real winners while controlling the false discovery rate.
 
 ---
+name: subgroup-analysis
 
 # Pre-Specified vs Exploratory Subgroups
 
@@ -508,6 +510,7 @@ tibble(
 ]
 
 ---
+name: pre-analysis-plans-m6
 
 # Pre-Analysis Plans: The Antidote
 
