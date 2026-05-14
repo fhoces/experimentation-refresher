@@ -210,6 +210,7 @@ ggplot(estimates_df, aes(est, fill = scenario)) +
 <a href="#sim-dgp" class="nav-btn">DGP behind this plot</a>
 
 ---
+name: where-bias-comes-from
 
 # Where Does the Bias Come From?
 
@@ -303,6 +304,7 @@ SUTVA also requires **one version** of treatment. This can fail when:
 ]
 
 ---
+name: interviewers-love-this
 
 # Why Interviewers Love This Topic
 
@@ -327,6 +329,7 @@ In tech, the three most common SUTVA violations are:
 - Capacity experiments: allocating more servers to treated users reduces capacity for control
 
 ---
+name: marketplace-detail
 
 # Application: Marketplace Interference in Detail
 
@@ -356,6 +359,7 @@ ggplot(market, aes(side, rides_per_driver, fill = period)) +
 ```
 
 ---
+name: coauthor-spillovers-intro
 
 # Application: Co-Author Network Spillovers
 
@@ -418,6 +422,7 @@ study_data |>
 ```
 
 ---
+name: coauthor-spillovers-problem
 
 # Co-Author Spillovers: The Problem
 
@@ -463,6 +468,7 @@ study_data |>
 Control studies connected to treated co-authors show **higher** reporting. The naive treatment effect **underestimates** the true effect (spillovers help controls).
 
 ---
+name: partial-vs-ge
 
 # Partial vs General Equilibrium
 
@@ -494,6 +500,7 @@ A crucial distinction for marketplace experiments:
 ]
 
 ---
+name: partial-vs-ge-sim
 
 # Partial vs GE: Simulated
 
@@ -536,6 +543,7 @@ ggplot(ge_data, aes(frac, ate)) +
 ```
 
 ---
+name: detecting-sutva
 
 # Detecting SUTVA Violations
 
@@ -564,6 +572,7 @@ How do you know if interference is a problem in your experiment?
 - If treated outcomes *worsen* as more units get treated (saturation), crowding is contaminating the treated group.
 
 ---
+name: treatment-fraction-test
 
 # How Treatment Fraction Reveals Interference
 
