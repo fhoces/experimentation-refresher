@@ -94,6 +94,7 @@ class: center, middle, inverse, title-slide
 &lt;/table&gt;
 
 ---
+name: dim-baseline
 
 # Start Simple: Difference in Means
 
@@ -159,6 +160,7 @@ The coefficient on `notification` is identical to the difference in means.
 &lt;a href="#ols-equals-dim" class="nav-btn"&gt;proof&lt;/a&gt;
 
 ---
+name: adding-covariates
 
 # Adding Covariates: Why and How
 
@@ -214,6 +216,7 @@ The unadjusted regression treats *all* of `post_earnings`'s variance as noise. T
 ]
 
 ---
+name: lin-covariate-adjustment
 
 # Lin (2013): Covariate Adjustment Done Right
 
@@ -252,6 +255,7 @@ summary(fit_lin)$coefficients |&gt; round(3)
 The treatment effect estimate is the coefficient on `notification`.
 
 ---
+name: cuped-intro
 
 # CUPED: Variance Reduction Using Pre-Experiment Data
 
@@ -335,6 +339,7 @@ Why use CUPED framing? It's easier to implement in production pipelines (you tra
 &lt;a href="#cuped-fwl" class="nav-btn"&gt;FWL connection&lt;/a&gt;
 
 ---
+name: cuped-sim
 
 # Simulation: CUPED Variance Reduction
 
@@ -343,6 +348,7 @@ Why use CUPED framing? It's easier to implement in production pipelines (you tra
 Both centered on the truth, but CUPED has a much narrower spread.
 
 ---
+name: stratification
 
 # Stratification and Post-Stratification
 
@@ -380,6 +386,7 @@ summary(fit_strat)$coefficients[1:2, ] |&gt; round(3)
 ]
 
 ---
+name: robust-se
 
 # Robust Standard Errors
 
@@ -430,6 +437,7 @@ For **cluster-randomized** designs, cluster the standard errors at the level of 
 ]
 
 ---
+name: itt-late-noncompliance
 
 # ITT vs LATE: Non-Compliance
 
@@ -492,6 +500,7 @@ cat("LATE: $", round(late, 1),
 ]
 
 ---
+name: itt-late-report
 
 # ITT vs LATE: What to Report?
 
@@ -517,12 +526,46 @@ cat("LATE: $", round(late, 1),
 ]
 
 ---
+name: itt-late-examples
+
+# ITT vs LATE in Practice: Ride-Sharing Examples
+
+When does a marketplace company face this decision?
+
+.pull-left[
+.small[
+**RCT with imperfect compliance** (assigned ≠ exposed; ITT always identified, LATE under monotonicity + exclusion):
+
+- **Driver push notification A/B** — 70% of drivers assigned to "show the zone alert" actually receive it (OS-level disabled, in-app opt-out). The DGP behind slide 13.
+- **Promo-code email to riders** — random discount sent; only a fraction open and redeem. ITT = effect of *sending*; LATE = effect on *redeemers*.
+- **New app feature behind a flag** — rolled out via app update; older app versions don't have it. ITT respects the rollout; LATE is the per-updater effect.
+- **Driver bonus eligibility** — randomized offer of a surge bonus; some drivers don't drive enough to qualify. ITT = effect on the offer pool; LATE = effect on those who hit the threshold.
+]
+]
+
+.pull-right[
+.small[
+**IV / encouragement design** (random assignment as instrument for an endogenous behavior):
+
+- **Random promo credit → actual ride-taking** — Cohen, Hahn, Hall, Levitt, Metcalfe (2016, NBER w22627) use Uber surge events as an instrument to estimate consumer surplus.
+- **Lottery for early feature access → feature use** — random invite acts as IV for adoption among the invited.
+- **Encouragement to switch payment method** — random in-app prompt as IV for the actual switch; downstream effect on retention.
+- **Quasi-random algorithmic exposure** — multi-arm A/B with imperfect cross-over: assignment as IV for cumulative time-on-feature.
+]
+]
+
+.highlight-box[
+**Rule of thumb.** Ship decisions → ITT (it's what the rollout will deliver). Mechanism / efficacy questions → LATE. Report both if they diverge meaningfully.
+]
+
+---
 
 # Application: Zone-Notification with CUPED
 
 &lt;img src="slides_files/figure-html/rideshare-cuped-1.png" style="display: block; margin: auto;" /&gt;
 
 ---
+name: did-pre-post
 
 # Application: DiD for Pre/Post Intervention
 
@@ -551,6 +594,7 @@ studies &lt;- tibble(
 ]
 
 ---
+name: did-estimation
 
 # DiD: Estimating Treatment Effects
 
@@ -591,6 +635,7 @@ Both unbiased (arm is randomized). **DiD shrinks SE ~2×** by absorbing study fi
 ]
 
 ---
+name: pre-analysis-plans-m5
 
 # Pre-Analysis Plans
 
