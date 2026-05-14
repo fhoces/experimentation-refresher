@@ -118,6 +118,7 @@ class: center, middle, inverse
 # Part 1 — Modern Difference-in-Differences
 
 ---
+name: classic-22-did
 
 # Classic 2×2 DiD: Two Groups, Two Periods
 
@@ -287,6 +288,7 @@ ggplot(bacon, aes(label, est, fill = comparison)) +
 The **red 2×2s** use an already-treated cohort as control — they difference out a treated trend, not a counterfactual. TWFE (dotted) averages them in anyway, landing far below truth (dashed). <a href="#goodman-bacon-derivation" class="inline-btn">why</a>
 
 ---
+name: modern-toolkit
 
 # The Modern Toolkit: One Slide
 
@@ -311,9 +313,17 @@ name: cs-main
 
 # Callaway-Sant'Anna in Practice
 
-The estimand is the **group-time ATT** $\text{ATT}(g, t)$: the effect on cohort $g$ at calendar time $t$. We hand-compute it as a 2×2 DiD between each cohort and the never-treated, then plot by event time.
+.small[
+**Estimand: group-time ATT** $\text{ATT}(g, t)$ — effect on units treated at $g$, evaluated at $t$. Two indices because TWFE collapsed this 2D structure into one biased number.
 
-```{r cs-handcoded, echo=FALSE, fig.height=3}
+**Construction.** For each cohort $g$ and post-period $t \geq g$, a clean 2×2 DiD vs the never-treated, anchored at $g-1$:
+
+$$\text{ATT}(g, t) = \big[\bar Y_{g,\,t} - \bar Y_{g,\,g-1}\big] - \big[\bar Y_{\text{nev},\,t} - \bar Y_{\text{nev},\,g-1}\big]$$
+
+Plot against *event time* $e = t - g$ to align cohorts at $e=0$. No negative weights — never-treated is uncontaminated.
+]
+
+```{r cs-handcoded, echo=FALSE, fig.height=2.5}
 cohort_means <- panel |> filter(is.finite(g)) |>
   group_by(g, t) |> summarise(y = mean(y), .groups = "drop")
 never_means <- panel |> filter(is.infinite(g)) |>
@@ -330,7 +340,9 @@ ggplot(att_gt, aes(e, att, color = factor(g))) +
   labs(x = "Event time (t - g)", y = "ATT(g,t)", color = "Cohort g")
 ```
 
-Each cohort's ATT path is positive and growing post-treatment — the heterogeneity TWFE smeared. <a href="#cs-code" class="inline-btn">code</a>
+.small[
+Each cohort's ATT grows post-treatment — the dynamic heterogeneity TWFE smeared. Aggregate over $g$ at each $e$ for an event study, or over both for an overall ATT. <a href="#cs-code" class="inline-btn">code</a>
+]
 
 ---
 name: honest-did-main
@@ -354,6 +366,7 @@ The output is a *sensitivity plot*: the CI grows as you allow more violation. If
 <a href="#honest-did-detail" class="nav-btn">visualization</a>
 
 ---
+name: staggered-application
 
 # Application: Staggered Zone-Notification Rollout
 
@@ -382,12 +395,30 @@ tibble(
 TWFE is downward-biased — early cohorts (with the largest effects) get re-used as controls for later cohorts, dragging the estimate down. CS and SA recover the truth.
 
 ---
+name: dd-interview-questions
+
+# Sample Interview Questions: Staggered DiD
+
+.small[
+Realistic 45-min round questions on Goodman-Bacon + Callaway-Sant'Anna / Sun-Abraham. The right column gives what's being tested and a one-paragraph answer skeleton.
+
+| Question | What it tests / answer skeleton |
+|---|---|
+| **1.** *"You ran TWFE on a staggered rollout of a new pricing algorithm in 30 cities (2022–24). Coefficient is +1.2%. A colleague says you can't trust it. Why?"* | Goodman-Bacon (2021) decomposition: TWFE is a weighted avg of all possible 2×2 DiDs, including ones that use *early-treated as the control* for late-treated. Under treatment-effect heterogeneity those comparisons get *negative* weights → bias of unknown sign. Ask to see the Bacon decomp + the share of negative weights. |
+| **2.** *"When IS TWFE a valid estimator for staggered designs?"* | Iff (a) treatment effects are homogeneous across cohorts AND across event time, AND (b) parallel trends holds. Marketplace cases routinely fail (a) — novelty effects, learning curves — so default to Callaway-Sant'Anna, Sun-Abraham, dCDH, or BJS. |
+| **3.** *"Walk me through Callaway-Sant'Anna at a high level."* | Estimate group-time $\text{ATT}(g, t)$ as a clean 2×2 DiD between cohort $g$ and the never-treated, anchored at the pre-period $g-1$. Aggregate to taste: average over $g$ at each event time $e = t - g$ (event-study) or over both for an overall ATT. No negative weights because the control group is uncontaminated. |
+| **4.** *"Pre-trends look noisy but not flat. What now?"* | Don't fail-to-reject and move on. Run HonestDiD (Rambachan-Roth 2023): bound post-period bias under credible parallel-trends violations; report the smoothness parameter $M$ at which the CI just covers zero. If $M$ is implausibly large, the result is robust. |
+| **5.** *"Drivers from treated cities migrate to nearby untreated cities. What breaks?"* | Parallel trends becomes a *no-cross-unit-spillover* statement. Control trends bend down → DiD **overstates** TTE. See [marketplace-matrix](#marketplace-matrix). Mitigate with distance-based donor exclusion, HonestDiD with a spillover-driven $\bar M$, or switch to switchback if randomization is feasible. |
+]
+
+---
 
 class: center, middle, inverse
 
 # Part 2 — Synthetic Control
 
 ---
+name: sc-one-treated
 
 # When You Have *One* Treated Unit
 
@@ -464,6 +495,7 @@ tibble(t = 1:n_T, Treated = treated_y, Synthetic = synth_y) |>
 The blue dashed line is the synthetic counterfactual: $\sum_j \hat w_j Y_{jt}$ where the $\hat w$ above are `r paste(round(w_hat[w_hat > 0.01], 2), collapse = ", ")`. <a href="#sc-code" class="inline-btn">code</a>
 
 ---
+name: sc-placebos
 
 # Synthetic Control: Inference via Placebos
 
@@ -524,12 +556,30 @@ Why this matters:
 <a href="#sdid-detail" class="nav-btn">SDID estimator detail</a>
 
 ---
+name: sc-interview-questions
+
+# Sample Interview Questions: Synthetic Control
+
+.small[
+Realistic 45-min round questions on SC and SDiD. The right column gives what's tested and a one-paragraph answer skeleton.
+
+| Question | What it tests / answer skeleton |
+|---|---|
+| **1.** *"Walk me through donor pool selection for an SC analysis of a single-city policy change."* | Match on pre-treatment outcomes (the load-bearing assumption) and on stable covariates (city size, market structure). Drop donors that experienced their own concurrent shocks; impose a geographic buffer to limit spillover into the donor pool. Report sensitivity to donor exclusion. |
+| **2.** *"Pre-treatment fit is bad — RMSPE is bigger than the pre-period outcome SD. What now?"* | Don't trust the SC. The synthetic counterfactual isn't tracking the treated unit's pre-trend, so post-period gaps could be noise rather than treatment. Options: expand the donor pool, lengthen the pre-period, switch to SDiD (which allows an additive intercept shift and doesn't need perfect pre-fit), or move to a different design entirely. |
+| **3.** *"How do you do inference for SC when there's one treated unit?"* | **Placebo-in-space** (Abadie-Diamond-Hainmueller): assign treatment to each donor in turn, re-estimate, and compute the post/pre RMSPE ratio. The empirical $p$-value is the rank of the actual treated unit's ratio in the placebo distribution. Sanity-check with placebo-in-time (fake treatment date in the pre-period). |
+| **4.** *"Why use SDiD over plain SC?"* | SDiD combines unit weights (SC-style) AND time weights (DiD-style), and allows an additive shift. Result: doesn't require near-perfect pre-fit, lower MSE in Arkhangelsky et al.'s empirical comparisons, and naturally extends to multiple treated units. Default to SDiD when you have a moderate-size donor pool and pre-fit is imperfect. |
+| **5.** *"You're estimating a fare-structure change in Austin via SC with Houston, Dallas, San Antonio in the donor pool. Drivers near Austin might cross-shop into those cities. What's the bias?"* | Donor pool contamination: treated city's expanded supply pulls drivers from nearby donors → donor trends adjust → synthetic Austin tracks the post-treatment Austin too closely → SC **understates** TTE. See [sc-interference-detail](#sc-interference-detail). Mitigations: geographic buffer, augmented SC (Ben-Michael-Feller-Rothstein 2021), explicit cross-city supply-elasticity model. |
+]
+
+---
 
 class: center, middle, inverse
 
 # Part 3 — Causal Forest
 
 ---
+name: why-hte
 
 # Why HTE — Beyond the ATE
 
@@ -611,6 +661,7 @@ bind_cols(X, true = true_tau, hat = tau_hat) |>
 Predicted $\hat\tau(x)$ rises with density; the forest recovers the truth (dashed). <a href="#cf-dgp" class="inline-btn">DGP code</a>
 
 ---
+name: policy-learning-teaser
 
 # Policy Learning — A Quick Teaser
 
@@ -634,6 +685,7 @@ class: center, middle, inverse
 # Part 4 — One-Pagers
 
 ---
+name: bandits-one-pager
 
 # Bandits — Adaptive Experimentation in One Slide
 
@@ -703,6 +755,7 @@ class: center, middle, inverse
 # Part 5 — Wrap-Up
 
 ---
+name: decision-tree
 
 # Decision Tree: Which Method When
 
@@ -723,6 +776,7 @@ class: center, middle, inverse
 ]
 
 ---
+name: interview-cheat-sheet
 
 # Interview Cheat Sheet
 
