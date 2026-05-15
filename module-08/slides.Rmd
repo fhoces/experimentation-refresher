@@ -320,6 +320,8 @@ name: cs-main
 
 $$\text{ATT}(g, t) = \big[\bar Y_{g,\,t} - \bar Y_{g,\,g-1}\big] - \big[\bar Y_{\text{nev},\,t} - \bar Y_{\text{nev},\,g-1}\big]$$
 
+*All four indices use $g-1$ (cohort $g$'s last pre-treatment period), not $t-1$* — the **universal base period** version of CS. Same baseline for both groups → the formula is a direct parallel-trends test: "did the gap between cohort-$g$ and never-treated change from $g{-}1$ to $t$?" A separate "varying base period" version with $t-1$ exists but drifts the anchor as $t$ moves.
+
 Plot against *event time* $e = t - g$ to align cohorts at $e=0$. No negative weights — never-treated is uncontaminated.
 ]
 
@@ -566,7 +568,7 @@ Realistic 45-min round questions on SC and SDiD. The right column gives what's t
 | Question | What it tests / answer skeleton |
 |---|---|
 | **1.** *"Walk me through donor pool selection for an SC analysis of a single-city policy change."* | Match on pre-treatment outcomes (the load-bearing assumption) and on stable covariates (city size, market structure). Drop donors that experienced their own concurrent shocks; impose a geographic buffer to limit spillover into the donor pool. Report sensitivity to donor exclusion. |
-| **2.** *"Pre-treatment fit is bad — RMSPE is bigger than the pre-period outcome SD. What now?"* | Don't trust the SC. The synthetic counterfactual isn't tracking the treated unit's pre-trend, so post-period gaps could be noise rather than treatment. Options: expand the donor pool, lengthen the pre-period, switch to SDiD (which allows an additive intercept shift and doesn't need perfect pre-fit), or move to a different design entirely. |
+| **2.** *"Pre-treatment fit is bad — RMSPE is bigger than the pre-period outcome SD. What now?"* | Don't trust the SC. The synthetic counterfactual isn't tracking the treated unit's pre-trend, so post-period gaps could be noise rather than treatment. Options: expand the donor pool, lengthen the pre-period, switch to SDiD (which allows an additive intercept shift and doesn't need perfect pre-fit), or move to a different design entirely. <a href="#sc-pre-fit" class="inline-btn">RMSPE detail</a> |
 | **3.** *"How do you do inference for SC when there's one treated unit?"* | **Placebo-in-space** (Abadie-Diamond-Hainmueller): assign treatment to each donor in turn, re-estimate, and compute the post/pre RMSPE ratio. The empirical $p$-value is the rank of the actual treated unit's ratio in the placebo distribution. Sanity-check with placebo-in-time (fake treatment date in the pre-period). |
 | **4.** *"Why use SDiD over plain SC?"* | SDiD combines unit weights (SC-style) AND time weights (DiD-style), and allows an additive shift. Result: doesn't require near-perfect pre-fit, lower MSE in Arkhangelsky et al.'s empirical comparisons, and naturally extends to multiple treated units. Default to SDiD when you have a moderate-size donor pool and pre-fit is imperfect. |
 | **5.** *"You're estimating a fare-structure change in Austin via SC with Houston, Dallas, San Antonio in the donor pool. Drivers near Austin might cross-shop into those cities. What's the bias?"* | Donor pool contamination: treated city's expanded supply pulls drivers from nearby donors → donor trends adjust → synthetic Austin tracks the post-treatment Austin too closely → SC **understates** TTE. See [sc-interference-detail](#sc-interference-detail). Mitigations: geographic buffer, augmented SC (Ben-Michael-Feller-Rothstein 2021), explicit cross-city supply-elasticity model. |
@@ -994,6 +996,30 @@ where $\hat\omega_i$ are unit weights from a regularized SC-style fit, and $\hat
 R implementation: `synthdid::synthdid_estimate()`. The package returns the estimate, jackknife SE, and a built-in SC vs DiD vs SDID comparison plot.
 
 <a href="#sdid-main" class="nav-btn">← back</a>
+
+---
+name: sc-pre-fit
+
+# Backup: When Is Pre-Fit "Bad"?
+
+.small[
+**RMSPE** = root mean squared prediction error in the pre-period — *the objective the SC weights minimize:*
+$$\text{RMSPE}_{\text{pre}} = \sqrt{\frac{1}{T_0}\sum_{t < T_0}\!\Bigl(Y_{1t} - \sum_j \hat w_j\, Y_{jt}\Bigr)^{\!2}}$$
+
+By construction, this is the best the donor pool can do under the SC constraints ($w_j \geq 0$, $\sum w_j = 1$).
+
+**The diagnostic.** Compare $\text{RMSPE}_{\text{pre}}$ to $\text{SD}(Y_{1t})_{\text{pre}}$ — the SD of the treated unit's own pre-period outcomes (the naive "predict the mean" baseline):
+
+| Ratio $\text{RMSPE}_{\text{pre}} / \text{SD}(Y_{1t})$ | Interpretation |
+|---|---|
+| $\ll 1$ (e.g., 0.1–0.3) | Synthetic tracks treated well — pre-fit is good, SC trustworthy. |
+| $\approx 1$ | Synthetic is no better than "predict the pre-period mean" — donor pool can't reconstruct the trajectory. |
+| $> 1$ | Synthetic is *worse than a constant*. Very bad — post-period gap is uninterpretable. |
+
+**Why ratio $> 1$ kills SC.** Identification rests on the pre-fit weights $\hat w$ also generating a valid counterfactual *post*-treatment. If $\hat w$ doesn't even reproduce the pre-period (worse than a constant!), there's no evidence the donor pool tracks the treated unit in the absence of treatment — any post-period gap could be fit error spilling forward, not the treatment effect. Q2's fixes (expand donors, lengthen pre-period, switch to SDiD) all target one of those failure modes.
+]
+
+<a href="#sc-interview-questions" class="nav-btn-br">← back</a>
 
 ---
 name: cs-code

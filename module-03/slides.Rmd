@@ -1037,12 +1037,14 @@ name: design-walkthrough-design
 
 | Design | When it wins | When it loses |
 |---|---|---|
-| **Cluster A/B** (whole cities) | Outcome cycles slowly (days/weeks). Many cities available. | Outcome cycles fast (within hours). Few cities → ICC-driven power loss. |
-| **Switchback** (whole-city ON/OFF periods) | Outcome cycles fast — driver positioning + accept rate move within minutes. | Long carryover (driver positioning persists across switches → bias). |
+| **Cluster A/B** (whole cities) | Outcome responds slowly (days/weeks) — e.g., retention, weekly active drivers. Many cities available. | Outcome responds fast (within hours) — e.g., accept rate. Few cities → ICC-driven power loss. |
+| **Switchback** (whole-city ON/OFF periods) | Outcome responds fast — driver positioning + accept rate move within minutes. | Long carryover (driver positioning persists across switches → bias). |
+
+*"Responds slowly/fast" = the outcome's natural adjustment timescale after a state change. Stock-like variables (retention) drift on a long timescale; flow-like variables (accept rate) equilibrate in minutes.*
 
 **For the zone nudge:** outcome (accept rate) reacts within minutes; we have only 8 cities (limited cluster A/B power). → **Switchback wins.**
 
-**Block length.** Per [M3 §12](../module-03/slides.html#11) (Bojinov MSE-optimal $L^{*} \propto (\delta^2 CT/\sigma^2)^{1/3}$): start with **30-minute blocks**, **5-minute washout** after each switch. Driver positioning roughly resets in 5 min; 30-min blocks balance carryover bias against effective sample.
+**Block length.** Per [M3 §12](../module-03/slides.html#11) (Bojinov MSE-optimal $L^{*} \propto (\delta^2 CT/\sigma^2)^{1/3}$): start with **30-minute blocks**, **15-minute washout** after each switch. Driver positioning roughly resets in 5 min, but a longer washout buys margin against carryover under variable conditions (peak hours, weather shocks) — at the cost of ~33% effective sample vs. a 5-min washout.
 ]
 
 <a href="#design-walkthrough-estimand" class="nav-btn">← step 1</a>
@@ -1056,15 +1058,16 @@ name: design-walkthrough-power
 .small[
 **Sample size, back of envelope:**
 
-- 8 cities × 14 days × 24 h × 2 blocks/h = **5,376 city-blocks**.
+- 30-min block + 15-min washout = **45-min cycle** → 32 analyzed blocks/day per city.
+- 8 cities × 14 days × 32 blocks/day = **3,584 city-blocks** (vs. 5,376 with a 5-min washout — washout cost ~33%).
 - Within-city block-cluster correlation in accept rate: assume $\text{ICC} \approx 0.05$ (low — block-level variation dominates).
 - $\sigma$ at baseline accept rate $p = 0.4$: $\sigma = \sqrt{p(1-p)} = 0.49$.
 
 **MDE for power = 0.8, $\alpha = 0.05$ two-sided** (block-clustered SE):
 
-$$\text{MDE} \approx 2.8 \times \sigma \times \sqrt{\frac{\text{DE}_{\text{eff}}}{n_{\text{eff}}}} \approx 0.4 \text{ pp}$$
+$$\text{MDE} \approx 2.8 \times \sigma \times \sqrt{\frac{\text{DE}_{\text{eff}}}{n_{\text{eff}}}} \approx 0.5 \text{ pp}$$
 
-where $\text{DE}_{\text{eff}}$ is the design effect from block clustering. **0.4 pp** is well below a plausible prior effect (~3 pp from a pilot).
+where $\text{DE}_{\text{eff}}$ is the design effect from block clustering. The **2.8** is $z_{1-\alpha/2} + z_{1-\beta} = 1.96 + 0.84$ — the standard multiplier for "detect 80% of the time at two-sided $\alpha = 0.05$" <a href="#power-mde-z" class="inline-btn">why 1.96 + 0.84?</a>. MDE rose from 0.4 pp (5-min washout) to **0.5 pp** because $n_{\text{eff}}$ shrank by 33% and MDE $\propto 1/\sqrt{n}$ ($\sqrt{1.5} \approx 1.22$). Still well below a plausible prior effect (~3 pp from a pilot).
 
 **If MDE were too high:** add cities (more clusters), shorten blocks (more periods, accept more carryover bias), or run longer. M4 has the formal derivation.
 ]
@@ -1104,9 +1107,12 @@ $$Y_{ct} = \mu_c + \gamma_t + \tau \cdot D_{ct} + \varepsilon_{ct}$$
 
 where $\mu_c$ = city FE, $\gamma_t$ = period (hour-of-day) FE. $\hat\tau$ is the TTE estimate.
 
-**Standard errors.** Block-clustered SE (per [switchback-formal](#switchback-formal)). Naive HC SE understates variance because within-block obs are perfectly correlated in $D$.
+**Standard errors.** One obs = one 30-min block × city ($n = 3{,}584$; each city contributes $14 \times 32 = 448$ blocks). **Cluster by city** — *not* by block, since each block IS one obs (block-clustered $\equiv$ HC at this aggregation). Why naive HC fails:
 
-**ITT vs LATE.** This rollout is a server-side flag flipped at the city × time level — no driver-side compliance issue. $\text{ITT} = \text{LATE}$.
+- **Within-city serial correlation in $\varepsilon_{ct}$.** Consecutive blocks for a city share transient shocks that $\mu_c$ and $\gamma_t$ don't absorb (carryover $D_{c,t-1}$, demand surges spanning multiple blocks, weather). So $\text{Cov}(\varepsilon_{ct}, \varepsilon_{ct'}) > 0$ — HC assumes 0.
+- **Few-clusters caveat.** 8 cities is below the 30+ rule of thumb for asymptotic cluster-robust SE → use **wild cluster bootstrap** (Cameron-Gelbach-Miller) for inference, not a $z$-test.
+
+**ITT vs LATE.** This rollout is a server-side flag flipped at the city × time level — no driver-side compliance issue. $\text{ITT} = \text{LATE}$. *When would $\text{ITT} < \text{LATE}$ here?* If "treated" were redefined as *notification received* (drivers offline, app killed, or notifications muted miss the push), then $\text{ITT} = \pi \cdot \text{LATE}$ with $\pi$ = delivery rate. Ship decision still cares about ITT — we deploy the flag flip, which inherits any delivery losses.
 
 **Decision rule.** Pre-specified one-sided $z$-test at $\alpha = 0.05$. Ship if $\hat\tau > 0$ AND all guardrail tests pass.
 
@@ -1132,7 +1138,7 @@ name: design-walkthrough-wrap
 
 **When NOT to use this design.**
 
-- **Slow-cycling outcome** (e.g., weekly active drivers): use cluster A/B at the city-week level instead.
+- **Slow-responding outcome** (e.g., weekly active drivers — adjusts over days/weeks): use cluster A/B at the city-week level instead.
 - **Very few cities** (<3): switchback's TTE estimate has too few independent units; switch to a structural model.
 - **Carryover suspected to dominate**: run a saturation experiment first to characterize the spillover function before switchback.
 ]
@@ -1428,6 +1434,33 @@ $$L^{*} \;=\; \left(\frac{2a}{b}\right)^{1/3} \;\propto\; \left(\frac{\delta^{2}
 ]
 
 <a href="#switchback-strengths" class="nav-btn-br">← back</a>
+
+---
+name: power-mde-z
+
+# Backup: Why MDE = (1.96 + 0.84) × SE?
+
+.small[
+**The formula.** For a two-sided test at level $\alpha$ with target power $1 - \beta$:
+$$\boxed{\;\text{MDE} \;=\; \bigl(z_{1-\alpha/2} \;+\; z_{1-\beta}\bigr) \times \text{SE}\;}$$
+At $\alpha = 0.05$, $1-\beta = 0.80$: $\text{MDE} = (1.96 + 0.84) \times \text{SE} = 2.80 \times \text{SE}$.
+
+**Derivation.** Test stat $T = \hat\delta / \text{SE}$. Under $H_0$: $T \sim N(0,1)$; under $H_1: \delta = \text{MDE} > 0$: $T \sim N(\text{MDE}/\text{SE},\,1)$.
+
+- **1.96 = $z_{0.975}$.** Two-sided $\alpha = 0.05$: reject when $|T| > c$. Want 2.5% mass in each tail of $N(0,1)$.
+- **0.84 = $z_{0.80}$.** Power $= P(T > 1.96 \mid H_1) = 0.80$ (lower-tail negligible). Standardizing gives $1.96 - \text{MDE}/\text{SE} = -0.84$, so $\text{MDE}/\text{SE} = 1.96 + 0.84$. $\square$
+
+**Intuition.** $1.96 \times \text{SE}$ is the minimum effect that *can* reach significance (50% power). The extra $0.84 \times \text{SE}$ shifts the alternative distribution far enough right that 80% of its mass lies above the critical value.
+
+**Reference table.** Multipliers at $\alpha=0.05$ two-sided, i.e. $1.96 + z_{1-\beta}$:
+
+| Power → | 50% | 80% | 90% | 95% |
+|---|---|---|---|---|
+| $z_{1-\beta}$ | 0 | 0.84 | 1.28 | 1.64 |
+| **Multiplier** | 1.96 | **2.80** | 3.24 | 3.60 |
+]
+
+<a href="#design-walkthrough-power" class="nav-btn-br">← back</a>
 
 ---
 name: spillover-regression
