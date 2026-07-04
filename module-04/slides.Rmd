@@ -504,6 +504,7 @@ name: baseline-panel-sim-setup
 
 Same dataset, three tests. Vary $\rho$ (how strongly baseline predicts follow-up) and see who wins.
 
+.tiny[
 ```{r panel-power-setup}
 sim_power_panel <- function(n_per_arm, effect, rho,
                             mu = 800, sigma = 150, nsim = 800) {
@@ -521,13 +522,16 @@ sim_power_panel <- function(n_per_arm, effect, rho,
   colMeans(do.call(rbind, results))
 }
 ```
+]
 
 --
 
+.tiny[
 ```{r panel-power-check}
 sim_power_panel(n_per_arm = 200, effect = 30, rho = 0.2)  # weak baseline: DiD hurts
 sim_power_panel(n_per_arm = 200, effect = 30, rho = 0.8)  # strong baseline: DiD and ANCOVA win big
 ```
+]
 
 ---
 name: baseline-panel-results
