@@ -229,7 +229,7 @@ The business doesn't ask "what's our power?" They ask:
 
 --
 
-```{r mde-curve, echo=FALSE, fig.height=3.2}
+```{r mde-curve, echo=FALSE, fig.height=2.8}
 effects <- seq(0.005, 0.06, by = 0.005)
 mde_results <- tibble(
   effect = effects,
@@ -418,18 +418,20 @@ configs <- tibble(
     power = map2_dbl(n_clusters, n_per_cluster,
                      ~ sim_power_cluster(.x, .y, effect = 0.2,
                                           icc = 0.05, nsim = 500)),
-    label = paste0(n_clusters, " clusters x ", n_per_cluster, " each")
+    label = paste0(n_clusters, " x ", n_per_cluster)
   )
 
 ggplot(configs, aes(n_clusters, power)) +
   geom_line(linewidth = 1.2, color = "steelblue") +
   geom_point(size = 3, color = "steelblue") +
-  geom_text(aes(label = label), vjust = -1, size = 3.5) +
+  geom_text(aes(label = label), vjust = -1, size = 3.2) +
   geom_hline(yintercept = 0.8, linetype = "dashed", color = "firebrick") +
+  scale_x_log10(breaks = c(10, 20, 40, 100, 200),
+                expand = expansion(mult = c(0.2, 0.35))) +
   labs(title = "Total N = 2,000 (fixed). More clusters >> bigger clusters.",
-       subtitle = "ICC = 0.05. Power improves by splitting into more, smaller clusters.",
-       x = "Number of clusters", y = "Power") +
-  ylim(0, 1)
+       subtitle = "ICC = 0.05. Power improves by splitting into more, smaller clusters. (label = clusters x size per cluster)",
+       x = "Number of clusters (log scale)", y = "Power") +
+  ylim(0, 1.05)
 ```
 
 ---
@@ -443,6 +445,7 @@ $$n \propto \frac{\sigma^2}{\delta^2} \quad \Rightarrow \quad \text{cut } \sigma
 
 --
 
+.tiny[
 ```{r covariate-power, fig.height=3.2}
 sim_power_covariate <- function(n_per_arm, effect, r_squared, nsim = 1000) {
   rejections <- map_lgl(1:nsim, function(i) {
@@ -457,6 +460,7 @@ sim_power_covariate <- function(n_per_arm, effect, r_squared, nsim = 1000) {
 cat("Without covariate:", sim_power(2000, effect = 0.1, baseline = 0.5, nsim = 1000), "\n")
 cat("With covariate (R^2=0.3):", sim_power_covariate(2000, effect = 0.1, r_squared = 0.3), "\n")
 ```
+]
 
 --
 
