@@ -131,17 +131,21 @@ The idea is dead simple:
 
 --
 
+.small[
 
 ```r
 sim_power &lt;- function(n_per_arm, effect, baseline = 0.10, nsim = 2000) {
+  # map_lgl: run the block below once per i in 1:nsim (i is just the run
+  # counter) and collect the nsim TRUE/FALSEs into one logical vector
   rejections &lt;- map_lgl(1:nsim, function(i) {
     control &lt;- rbinom(n_per_arm, 1, prob = baseline)
     treated &lt;- rbinom(n_per_arm, 1, prob = baseline + effect)
-    t.test(treated, control)$p.value &lt; 0.05
+    t.test(treated, control)$p.value &lt; 0.05   # TRUE if this run rejects H0
   })
   mean(rejections)
 }
 ```
+]
 
 --
 
