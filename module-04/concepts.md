@@ -105,6 +105,23 @@ You can increase power without more samples by reducing residual variance:
 A covariate with $R^2 = 0.3$ reduces the required sample size by ~30%.
 This is equivalent to getting 30% more users for free.
 
+### DiD vs. ANCOVA: The Baseline-Correlation Trade-off
+
+The special case of CUPED is a **repeated measurement of the same outcome**
+(last week's earnings as a baseline for this week's earnings), correlated
+at $\rho$. Relative to a post-only comparison (variance $2\sigma^2/n$):
+
+- **DiD / change score** ($\Delta = Y - X$): variance scales by $2(1-\rho)$.
+  Only beats post-only once $\rho > 0.5$; below that, differencing adds
+  independent baseline noise instead of removing it.
+- **ANCOVA** ($Y \sim \text{treat} + X$): variance scales by $1-\rho^2$.
+  Always at least as good as both alternatives, since
+  $1-\rho^2 \le 2(1-\rho)$ for every $\rho \in [0,1]$.
+
+This is the classic Frison-Pocock (1992) result: a change-score analysis is
+not a safe default the way ANCOVA is. Check $\rho$ before picking the
+estimator.
+
 ### What Tech Companies Care About
 
 - Can you compute the MDE for a given experiment?

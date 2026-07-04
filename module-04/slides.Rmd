@@ -465,6 +465,99 @@ cat("With covariate (R^2=0.3):", sim_power_covariate(2000, effect = 0.1, r_squar
 ]
 
 ---
+name: baseline-panel-power
+
+# Using a Baseline Measurement: DiD vs. ANCOVA
+
+A ride-sharing platform is about to test a driver-app change. For every driver you also have **last week's earnings** as a baseline, correlated with this week's earnings at $\rho$ (driver skill and location persist week to week).
+
+--
+
+Three ways to test for a lift, from the same data:
+
+| Estimator | Uses the baseline how |
+|---|---|
+| **Post-only** | Ignores it. Compare this week's earnings, treated vs. control. |
+| **DiD / change score** | Subtracts it. Compare $\Delta = Y - X$, treated vs. control. |
+| **ANCOVA** | Regresses on it. $Y \sim \text{treat} + X$. |
+
+--
+
+Relative to post-only variance $2\sigma^2/n$, the two baseline-adjusted estimators' variance scales by:
+
+$$\text{DiD: } 2(1-\rho) \qquad \text{ANCOVA: } 1-\rho^2$$
+
+--
+
+.highlight-box[
+**DiD is not always the free lunch it looks like.** It only beats post-only once $\rho > 0.5$ -- below that, subtracting a weakly correlated baseline just adds independent noise on top. ANCOVA never has this problem: $1-\rho^2 \le 2(1-\rho)$ for every $\rho$, so it dominates both, always.
+]
+
+---
+name: baseline-panel-sim-setup
+
+# Simulating the Three Estimators
+
+Same dataset, three tests. Vary $\rho$ (how strongly baseline predicts follow-up) and see who wins.
+
+```{r panel-power-setup}
+sim_power_panel <- function(n_per_arm, effect, rho,
+                            mu = 800, sigma = 150, nsim = 800) {
+  results <- map(1:nsim, function(i) {
+    treat <- rep(c(0, 1), each = n_per_arm)
+    z1 <- rnorm(2 * n_per_arm); z2 <- rnorm(2 * n_per_arm)
+    baseline  <- mu + sigma * z1                                # last week
+    followup0 <- mu + sigma * (rho * z1 + sqrt(1 - rho^2) * z2) # this week, untreated
+    followup  <- followup0 + treat * effect
+    df <- tibble(baseline, followup, treat)
+    c(post   = t.test(followup ~ treat, data = df)$p.value < 0.05,
+      did    = t.test(I(followup - baseline) ~ treat, data = df)$p.value < 0.05,
+      ancova = coef(summary(lm(followup ~ treat + baseline, data = df)))["treat", 4] < 0.05)
+  })
+  colMeans(do.call(rbind, results))
+}
+```
+
+--
+
+```{r panel-power-check}
+sim_power_panel(n_per_arm = 200, effect = 30, rho = 0.2)  # weak baseline: DiD hurts
+sim_power_panel(n_per_arm = 200, effect = 30, rho = 0.8)  # strong baseline: DiD and ANCOVA win big
+```
+
+---
+name: baseline-panel-results
+
+# When Does the Baseline Pay Off?
+
+```{r panel-power-curve, echo=FALSE, fig.height=3.8}
+rhos <- seq(0, 0.9, by = 0.1)
+panel_power <- map_dfr(rhos, function(r) {
+  p <- sim_power_panel(n_per_arm = 200, effect = 30, rho = r)
+  tibble(rho = r, `Post-only` = p["post"], `DiD` = p["did"], `ANCOVA` = p["ancova"])
+}) |>
+  pivot_longer(-rho, names_to = "estimator", values_to = "power")
+
+ggplot(panel_power, aes(rho, power, color = estimator)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 2.5) +
+  geom_vline(xintercept = 0.5, linetype = "dashed", color = "grey50") +
+  annotate("text", x = 0.52, y = 0.97, label = "DiD crosses post-only at rho = 0.5",
+           size = 3.3, hjust = 0) +
+  scale_color_manual(values = c("Post-only" = "grey40", "DiD" = "firebrick",
+                                "ANCOVA" = "steelblue")) +
+  ylim(0, 1) +
+  labs(title = "200 drivers per arm, $30 lift on $150-SD weekly earnings",
+       x = "Correlation between baseline and follow-up earnings",
+       y = "Power", color = NULL) +
+  theme(legend.position = "top")
+```
+
+--
+
+At $\rho = 0.7$ (earnings persist fairly strongly week to week): post-only gets **~50% power**, DiD gets **~73%**, ANCOVA gets **~80%** -- from the exact same 200 drivers per arm.
+
+---
 
 # Summary: The Power Checklist
 
