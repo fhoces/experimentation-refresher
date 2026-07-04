@@ -122,6 +122,23 @@ This is the classic Frison-Pocock (1992) result: a change-score analysis is
 not a safe default the way ANCOVA is. Check $\rho$ before picking the
 estimator.
 
+### Getting Rho From Data, Not From a Guess
+
+The formulas above need a value for $\rho$. A widely-used approach for panel
+RCTs (the `pcpanel` calculator behind Burlig, Preonas and Woerman 2020)
+skips guessing it: **resample your actual historical panel** instead of
+assuming a distribution.
+
+1. Take real baseline/follow-up pairs from before any experiment ran.
+2. Per simulation, draw units with replacement, keeping each unit's own
+   pair intact, so whatever correlation or skew really exists rides along.
+3. Randomly label half "placebo-treated," add a candidate effect, run the
+   planned estimator, record reject/no-reject.
+4. Power(effect) = the fraction of rejections across simulations.
+
+The only assumption left is that the historical correlation resembles what
+the experiment will see; no parametric form, no hand-picked $\rho$.
+
 ### What Tech Companies Care About
 
 - Can you compute the MDE for a given experiment?
