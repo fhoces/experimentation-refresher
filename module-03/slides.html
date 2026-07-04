@@ -137,6 +137,16 @@ A ride-sharing platform operates in **40 cities** with **5,000 drivers each** (2
 | Region cluster | 5-city region | 8 | Policy effect (−0.02) |
 
 ---
+
+# The Same Problem at an Online Retailer
+
+- Fulfillment capacity is shared within a metro, so the clean unit of randomization is the metro, not the customer: this is a geo experiment.
+- Randomizing individual customers to next-day delivery while others remain on two-day creates capacity interference within every metro assigned to "control."
+- Switchback designs are poorly suited: a customer told "next-day" in week 1 anchors on that expectation, so reverting to two-day in week 2 measures disappointed-expectation effects rather than absence of treatment.
+- The metro-level design shrinks the effective sample from millions of customers to dozens of metros, which foreshadows the power challenges in Module 4.
+- Contrast with ride-sharing surge pricing, where a driver's response resets within a trip; the stickiness of the delivery promise is what rules out the time-based switchback.
+
+---
 name: indiv-cluster-main
 
 # Individual vs Cluster: Side by Side

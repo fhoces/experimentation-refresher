@@ -113,3 +113,9 @@ blinding, behavioral outcomes, and deception.
 - Can you distinguish between "the treatment works" and "the treatment
   works here, now, for these users"?
 - Can you articulate what additional data you would need to extrapolate?
+
+## The same problem at an online retailer
+
+The fulfillment team's decision to launch next-day delivery first in the densest, highest-demand metros creates a site-selection problem. Dense metros are chosen because infrastructure costs are lowest there and courier networks are already mature; these are also the markets where customers are most time-sensitive and where the incremental benefit of faster delivery is largest. The treatment effect measured in the pilot metros is therefore an overestimate of what a national rollout will produce. The ATT on early-adopting markets does not transport to the thinner, later markets, because the covariate distribution of the target population (lower demand density, fewer time-sensitive customers) differs systematically from the source population.
+
+Temporal validity is a second concern. If pilot measurement runs during a peak shopping season, both order volume and customers' responsiveness to delivery speed are atypically high. An effect measured in November may not extrapolate to February. A transportability analysis would reweight the CATE estimated in the source population by the demand-density distribution of the target markets before projecting a national lift figure, and a seasonal adjustment would qualify any point estimate with the time-of-year caveat.

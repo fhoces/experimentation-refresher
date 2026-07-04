@@ -146,3 +146,9 @@ the experiment will see; no parametric form, no hand-picked $\rho$.
 - Do you understand why clustering kills power and what to do about it?
 - Can you set up a simulation-based power analysis for a non-standard design?
 - Do you know how to use pre-treatment data to boost power?
+
+## The same problem at an online retailer
+
+The membership experiment and the delivery rollout each present a distinct power challenge. For the membership program, customer spend is heavy-tailed: a small share of high-frequency buyers accounts for most of the outcome variance, so the standard deviation of the outcome is much larger than a typical per-customer analysis would suggest. The required sample size for a given MDE grows with $\sigma^2$, and a naive power calculation that uses the median customer's spend variance will be wrong. Winsorizing the top of the spend distribution or including last year's spend as a pre-experiment covariate (CUPED) both reduce the effective variance substantially and are the standard adjustments for this setting.
+
+For the delivery rollout, the unit of randomization is the metro, not the customer. The effective sample is therefore the number of metros in the experiment, which may be twenty or thirty rather than millions. Within a metro, weekly order counts are highly correlated across customers because they share common local shocks; the ICC is high, and the design effect is large. A power calculation that plugs in customer-level variance and a customer-level sample size will dramatically overstate power. The honest calculation is a simulation on the metro-week panel that accounts for the clustered structure and the ICC.

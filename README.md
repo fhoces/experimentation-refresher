@@ -4,8 +4,7 @@ A hands-on refresher on experimental design and causal inference for tech
 company interviews. Heavy on simulations, numerical examples, and intuition.
 Proofs in backup slides.
 
-Applications drawn from ride-sharing platforms, online advertising, and
-academic research.
+Applications drawn from ride-sharing platforms, online advertising, academic research, and online retail (a paid membership program and a staggered next-day-delivery rollout across metro areas).
 
 > **Live slides:** https://fhoces.github.io/experimentation-refresher/
 >

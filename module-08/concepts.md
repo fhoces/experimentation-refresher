@@ -202,6 +202,14 @@ mSPRT form: $\hat\theta_t \pm \sigma\sqrt{(2\log(1/\alpha) + \log(1+t\rho^2))/(t
 
 ---
 
+## The same problem at an online retailer
+
+The two online-retail examples that have appeared across this course reappear in the modern toolkit. For the delivery rollout, the staggered metro-by-metro upgrade is exactly the staggered-adoption DiD setting that Module 8 introduces: TWFE is biased when delivery effects grow as customers learn the reliability of the new service, and the modern robust estimators (Callaway-Sant'Anna, BJS) recover cohort-level ATT(g,t) cleanly. A single flagship metro receiving same-day delivery before any others is the synthetic-control setting: the counterfactual order trajectory is built from a convex combination of metros still on two-day delivery, and inference runs through placebo-in-space.
+
+For the membership program, the randomized discount experiment generates heterogeneous treatment effects across tenure, category mix, and pre-period spend. Causal forest estimates the conditional effect surface; policy learning turns that surface into a targeting rule that determines who receives the next discount offer under a fixed promotional budget. Both applications, and the decision logic for choosing among them, are covered in depth in the companion deep-dive course on causal inference beyond A/B tests.
+
+---
+
 ## Going Deeper
 
 The companion course **Causal Inference Beyond A/B Tests** (in development)

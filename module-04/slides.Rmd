@@ -404,6 +404,19 @@ With only 10 cities per arm, power is low even for a large effect (0.15 SD). You
 ]
 
 ---
+
+# The Same Problem at an Online Retailer
+
+**The membership program.**
+- Member spend is heavy-tailed: a few high-frequency "whale" customers dominate the variance, so $\sigma^2$ is large and the required sample for a given MDE is steep.
+- Winsorizing the spend outcome or including last year's spend as a covariate sharply reduces the effective variance and cuts the required $n$.
+
+**The delivery rollout.**
+- Randomization is at the metro level; effective $n$ = number of metros, not customers.
+- Intra-metro ICC on weekly orders is high: common demand shocks within a market produce a large design effect and a tiny effective sample.
+- A simulation-based power calculation on the metro-week panel is the honest approach; the standard formula with customer-level $\sigma$ drastically understates the required number of metros.
+
+---
 name: more-vs-bigger-clusters
 
 # More Clusters vs. Bigger Clusters

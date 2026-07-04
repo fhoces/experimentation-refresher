@@ -91,3 +91,7 @@ their immediate neighbors:
 - Do you understand when switchback is better than cluster randomization?
 - Can you estimate the power loss from clustering (ICC, design effect)?
 - Can you identify when none of these solutions works (pervasive GE effects)?
+
+## The same problem at an online retailer
+
+Because fulfillment capacity is a metro-level resource, the natural unit of randomization for next-day delivery is the metro. Assigning individual customers within a metro to next-day eligibility creates within-metro interference: treated and control customers draw from the same courier pool, so the design violates SUTVA through exactly the capacity mechanism described in Module 2. The clean design is a geo experiment that assigns entire metros to next-day or two-day, keeping the interference within each group rather than across arms. Switchback designs are a poor fit here. A driver's response to a surge resets within a trip, but a customer told that their packages arrive tomorrow develops an expectation that persists across days or weeks. Flipping a metro back to two-day delivery in a switchback's off period measures the effect of disappointed expectations, not the counterfactual without next-day. The metro-level design also sharply reduces the effective sample size, from millions of customers to dozens of metros, which has direct implications for statistical power covered in Module 4.

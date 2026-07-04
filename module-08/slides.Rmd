@@ -397,6 +397,19 @@ tibble(
 TWFE is downward-biased — early cohorts (with the largest effects) get re-used as controls for later cohorts, dragging the estimate down. CS and SA recover the truth.
 
 ---
+
+# The Same Problem at an Online Retailer
+
+**The membership program.**
+- A randomized discount experiment generates heterogeneous effects: causal forest estimates which customers respond most to the signup offer based on tenure, category mix, and pre-period spend.
+- Policy learning turns that heterogeneity into a targeting rule: whom to offer the next discount under a fixed promotional budget.
+
+**The delivery rollout.**
+- The staggered metro-by-metro rollout is the staggered-adoption DiD setting; TWFE is biased when delivery effects grow as customers learn the new promise (Module 8 of the sibling course covers the fix).
+- A single flagship metro receiving same-day delivery before any others is the synthetic-control setting: build the counterfactual from donor metros still on two-day.
+- Both settings appear in the decision tree for choosing among modern causal methods, which is the subject of the companion deep-dive course.
+
+---
 name: dd-interview-questions
 
 # Sample Interview Questions: Staggered DiD

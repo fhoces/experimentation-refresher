@@ -121,6 +121,16 @@ Unbiased for the ATE. But the standard error is large because `post_earnings` is
 ]
 
 ---
+
+# The Same Problem at an Online Retailer
+
+- The randomized signup discount is the instrument: ITT = effect of the discount offer on annual spend; LATE = effect of membership on customers who joined because of the discount (compliers).
+- Not all offered customers join (never-takers) and some join regardless (always-takers), so 2SLS recovers the LATE, not the ATE.
+- CUPED with pre-period spend as the covariate is the natural variance-reduction strategy: last year's spend strongly predicts this year's and is observed for every customer before the experiment.
+- Multiple outcome categories (shipping savings, streaming usage, category spend) require a pre-analysis plan that fixes the primary metric before unblinding to avoid inflating false positives.
+- Reporting ITT is the conservative business choice; LATE is the right answer when the question is the causal effect of membership itself on complier spend.
+
+---
 name: ols-equals-dim-main
 
 # Regression: Same Thing, More Flexible

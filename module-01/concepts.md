@@ -78,3 +78,7 @@ goes deep on this.
 - Do you understand that randomization is necessary but not sufficient
   (SUTVA, power, compliance matter too)?
 - Can you distinguish ATE from ATT and explain when it matters?
+
+## The same problem at an online retailer
+
+A large online retailer's paid membership program illustrates the selection-bias decomposition exactly. Members spend more on average than non-members, but this naive comparison conflates the causal effect of membership with who chooses to join. Heavy-frequency shoppers self-select into the program because the shipping benefit is most valuable to them; they would have spent more even without the membership. The naive difference therefore equals the ATT plus a positive selection term, with no way to separate the two from observational data alone. The ATT on members and the ATE across all customers diverge because the self-selected group is not representative of the average customer. Randomizing membership directly is commercially infeasible, since announcing that some customers are excluded from the program would be unpopular. The feasible design is a randomized signup discount, which restores the causal interpretation at the cost of recovering a LATE rather than an ATE, a design element revisited in Module 5.

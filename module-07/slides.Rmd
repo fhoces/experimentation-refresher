@@ -115,6 +115,16 @@ The CEO asks: "Great, let's roll this out to all 40 cities." Should you?
 
 ---
 
+# The Same Problem at an Online Retailer
+
+- The fulfillment team launches next-day delivery first in dense, high-demand metros, because infrastructure costs are lowest there and courier networks are already mature.
+- The early-rollout metros are selected on demand density, which is also correlated with the treatment effect: time-sensitive customers in dense markets respond more to faster delivery.
+- The measured effect in pilot metros overstates what a nationwide rollout will produce; the ATT on early metros does not transport to the thinner, later markets.
+- Temporal validity: if pilot measurement runs during a peak shopping season, both order volume and customers' responsiveness to fast delivery are atypically high.
+- A transportability analysis would reweight the source-population CATE by the demand-density distribution of the target population before projecting a national lift.
+
+---
+
 # Internal vs External Validity
 
 .pull-left[

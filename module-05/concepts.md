@@ -127,3 +127,9 @@ pre-specified (confirmatory) from data-driven (exploratory) results.
 - Can you set up proper standard errors for a clustered design?
 - Do you understand why naively regressing on compliance is wrong?
 - Can you explain the difference between pre-specified and post-hoc analysis?
+
+## The same problem at an online retailer
+
+The membership experiment is a canonical encouragement design. The retailer cannot randomize who becomes a member, but it can randomize who receives a signup discount. The discount offer is the instrument: it shifts the probability of joining without directly affecting spend except through membership. The intent-to-treat estimate is the average effect of receiving the offer across everyone assigned to the treatment arm, including those who decline to join. The LATE is the average effect of membership itself on compliers: customers who join because of the discount but would not have joined at full price. These two estimands differ because the treatment effect on never-takers is not informative about membership, and because always-takers join regardless of the offer.
+
+CUPED is the natural variance-reduction step for this experiment. Pre-period spend is a strong predictor of post-period spend, is measured for every customer before the experiment begins, and is uncorrelated with the randomized assignment. Regressing out the pre-period spend projection reduces the residual variance and narrows the confidence interval without biasing the estimate. Multiple outcome categories (shipping, streaming, grocery, electronics) require a pre-analysis plan that specifies the primary metric before unblinding to prevent the inflation of false positives that arises from choosing the most favorable outcome after the fact.

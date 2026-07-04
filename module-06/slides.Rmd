@@ -424,6 +424,16 @@ ggplot(subgroup_results, aes(reorder(paste(city, tenure, peak, sep = " | "),
 
 ---
 
+# The Same Problem at an Online Retailer
+
+- The membership team tests multiple perk bundles (free fast shipping, streaming credits, grocery discounts, extended return windows) across segments defined by customer tenure, purchase category, and device type.
+- Testing every bundle in every segment without correction produces a high expected count of false positives even when most bundles have no true effect.
+- Pre-specified subgroups (new vs tenured members) are the confirmatory analysis; post-hoc slicing to whichever segment showed the best number is the garden of forking paths.
+- Apply Benjamini-Hochberg across the perk-bundle family to control the false discovery rate; Bonferroni is too conservative when the bundle list is large.
+- A pre-analysis plan written before launch locks in which bundle-by-segment comparisons are primary and which are exploratory, making the multiple-testing correction credible.
+
+---
+
 # Ride-Sharing: After Correction
 
 ```{r rideshare-correction, echo=FALSE, fig.height=4}

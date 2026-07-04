@@ -119,6 +119,16 @@ drivers |>
 ...or does it?
 
 ---
+
+# The Same Problem at an Online Retailer
+
+- A large online retailer offers a paid membership program (annual fee, free fast shipping plus perks); the core question is whether membership causes incremental spend or whether heavy shoppers self-select in.
+- The naive comparison (member vs non-member average spend) is exactly the selection-bias decomposition: naive difference = ATT + selection term.
+- The selection term is positive: heavy-frequency buyers join disproportionately and would have spent more even without membership.
+- ATE and ATT diverge here, because the customers most likely to join (and who drive ATT) are those who already buy frequently, not the average customer.
+- Randomizing membership directly is commercially infeasible; a randomized signup discount is the feasible design, foreshadowing the encouragement framework in Module 5.
+
+---
 name: fundamental-problem
 
 # The Fundamental Problem

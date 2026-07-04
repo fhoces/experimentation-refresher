@@ -124,6 +124,16 @@ The **treated group** outcome is *contaminated* by the treatment itself (crowdin
 ]
 
 ---
+
+# The Same Problem at an Online Retailer
+
+- The retailer offers next-day delivery by upgrading metros from a shared fulfillment network; customer-level randomization of next-day eligibility breaks SUTVA through capacity.
+- A courier serving a treated customer cannot simultaneously serve a control customer in the same metro: treating some degrades control outcomes.
+- The control group's measured outcomes are artificially low, because treated orders compete for the same courier capacity.
+- The naive difference overstates the full-rollout effect: the measured control is a degraded counterfactual, not the true `\(Y(0)\)` under a world where no one gets next-day.
+- No hidden versions: all treated customers receive the same next-day promise, so that SUTVA component holds; the interference, not the version problem, is the issue here.
+
+---
 name: sutva-main
 
 # SUTVA: Stated Precisely

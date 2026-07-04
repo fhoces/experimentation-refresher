@@ -96,3 +96,9 @@ and makes the distinction between confirmatory and exploratory transparent.
 - Can you apply `p.adjust()` in R with the right method?
 - Do you understand the interaction test vs subgroup-specific test distinction?
 - Can you articulate why pre-analysis plans help?
+
+## The same problem at an online retailer
+
+Membership perk experiments are a natural setting for multiple-testing problems. The product team may test several benefit bundles (free fast shipping, streaming credits, grocery discounts, extended return windows) and want to know which performs best across segments defined by customer tenure, primary category, and device type. Running all combinations as separate hypothesis tests without correction produces a high expected count of false positives even when most bundles have no true effect. The family-wise error rate explodes with the number of tests; a team that reports the single best-performing bundle without adjustment is very likely reporting noise.
+
+Pre-specifying the subgroups of interest is the key discipline. New versus tenured customers is a natural pre-specified cut if the business question is whether the perk changes behavior for new members or reinforces it for existing ones. Slicing by whichever tenure bin happened to show the best number after unblinding is the garden of forking paths: the same dataset, analyzed many ways, inflates the effective false-positive rate far beyond the nominal level. Benjamini-Hochberg is the appropriate correction across the perk-bundle family when the team accepts some false discoveries in exchange for better power than Bonferroni. A pre-analysis plan written before launch locks in which comparisons are primary and which are exploratory, making the correction credible to stakeholders who are skeptical of post-hoc adjustments.
