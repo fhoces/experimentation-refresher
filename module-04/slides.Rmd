@@ -566,6 +566,65 @@ ggplot(panel_power, aes(rho, power, color = estimator)) +
 At $\rho = 0.7$ (earnings persist fairly strongly week to week): post-only gets **~50% power**, DiD gets **~73%**, ANCOVA gets **~80%** -- from the exact same 200 drivers per arm.
 
 ---
+name: pcpanel-concept-main
+
+# Where Does Rho Actually Come From?
+
+The DiD/ANCOVA formulas need a value for $\rho$. Last section we just picked one. In practice, when you have real historical data, you don't have to.
+
+--
+
+A widely-used approach for panel RCTs (the `pcpanel` calculator behind Burlig, Preonas and Woerman 2020): instead of assuming a distribution and a $\rho$, **resample your actual historical panel**.
+
+--
+
+1. Take real baseline/follow-up pairs from before any experiment ran.
+2. For each simulation: draw units **with replacement**, keeping each unit's own pair intact, so whatever correlation, skew, or clustering really exists comes along for free.
+3. Randomly label half "placebo-treated," add a candidate effect, run your planned estimator, record reject/no-reject.
+4. Power(effect) = fraction of rejections. Sweep effect sizes for the full curve.
+
+--
+
+.highlight-box[
+The only assumption left is that history repeats: the correlation in your historical data resembles what the experiment will see. No parametric form, no hand-picked $\rho$.
+]
+
+---
+name: pcpanel-resample-demo
+
+# Live: Power From Resampling, Not From Rho
+
+A fixed batch of 30 "already observed" cities (what you'd actually have in hand before running the experiment). We never tell the power function their correlation.
+
+.tiny[
+```{r pcpanel-resample}
+set.seed(7)
+n_hist <- 30
+quality <- rnorm(n_hist)                                 # unobserved city factor
+historical <- tibble(
+  baseline  = 800 + 150 * quality + rnorm(n_hist, 0, 90),
+  followup0 = 800 + 150 * quality + rnorm(n_hist, 0, 90)  # same factor: real, un-assumed rho
+)
+cat("actual historical correlation:", round(cor(historical$baseline, historical$followup0), 2), "\n")
+
+power_resample <- function(effect, panel, n_per_arm = 15, nsim = 1000) {
+  rejections <- map_lgl(1:nsim, function(i) {
+    draw <- panel[sample(nrow(panel), 2 * n_per_arm, replace = TRUE), ]
+    treat <- rep(c(0, 1), each = n_per_arm)
+    followup <- draw$followup0 + treat * effect
+    t.test(I(followup - draw$baseline) ~ treat)$p.value < 0.05
+  })
+  mean(rejections)
+}
+power_resample(effect = 30, panel = historical)
+```
+]
+
+--
+
+The correlation never appears in `power_resample()`; it rides along inside `historical` every time a unit is redrawn. Same logic as the DiD formula, no formula required.
+
+---
 
 # Summary: The Power Checklist
 
