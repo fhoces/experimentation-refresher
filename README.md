@@ -18,9 +18,9 @@ Applications drawn from ride-sharing platforms, online advertising, academic res
 | **1** | [The Experimental Ideal](module-01/) ([slides](https://fhoces.github.io/experimentation-refresher/module-01/slides.html)) | Potential outcomes, ATE, selection bias, randomization | Zone-notification driver experiment |
 | **2** | [SUTVA and When It Breaks](module-02/) ([slides](https://fhoces.github.io/experimentation-refresher/module-02/slides.html)) | Interference, marketplace effects, network spillovers | Zone crowding + co-author spillovers |
 | **3** | [Designing Around Interference](module-03/) ([slides](https://fhoces.github.io/experimentation-refresher/module-03/slides.html)) | Cluster randomization, switchback, geo experiments | City-level pricing experiments |
-| 4 | Power and Sample Size | MDE, simulation-based power, clustering effects, ICC | A/B test planning for ad formats |
+| **4** | [Power and Sample Size](module-04/) ([slides](https://fhoces.github.io/experimentation-refresher/module-04/slides.html)) | MDE, simulation-based power, clustering effects, ICC | A/B test planning for ad formats |
 | **5** | [Analyzing Experiments](module-05/) ([slides](https://fhoces.github.io/experimentation-refresher/module-05/slides.html)) | Regression adjustment, CUPED, ITT vs LATE, PAPs | Covariate adjustment for driver experiments |
-| 6 | Multiple Testing & Subgroups | Bonferroni, BH, pre-specified subgroups, forking paths | Testing multiple ad creatives |
+| **6** | [Multiple Testing & Subgroups](module-06/) ([slides](https://fhoces.github.io/experimentation-refresher/module-06/slides.html)) | Bonferroni, BH, pre-specified subgroups, forking paths | Testing multiple ad creatives |
 | **7** | [External Validity](module-07/) ([slides](https://fhoces.github.io/experimentation-refresher/module-07/slides.html)) | Site selection, transportability, temporal validity | Cross-city generalization |
 | **8** | [Beyond the A/B Test](module-08/) ([slides](https://fhoces.github.io/experimentation-refresher/module-08/slides.html)) | Modern DiD (Goodman-Bacon, CS, Honest DiD), synthetic control / SDID, causal forests for HTE | Staggered zone-notification rollout; one-city policy change |
 

@@ -77,10 +77,10 @@ cities_df <- tibble(
 <tr><td>1</td><td><a href="../module-01/slides.html">The Experimental Ideal</a></td><td>✓ done</td></tr>
 <tr><td>2</td><td><a href="../module-02/slides.html">SUTVA and When It Breaks</a></td><td>✓ done</td></tr>
 <tr><td>3</td><td><a href="../module-03/slides.html">Designing Around Interference</a></td><td>✓ done</td></tr>
-<tr><td>4</td><td>Power and Sample Size</td><td>done</td></tr>
+<tr><td>4</td><td><a href="../module-04/slides.html">Power and Sample Size</a></td><td>✓ done</td></tr>
 <tr><td>5</td><td><a href="../module-05/slides.html">Analyzing Experiments</a></td><td>✓ done</td></tr>
-<tr><td>6</td><td>Multiple Testing & Subgroups</td><td>done</td></tr>
-<tr><td><b>7</b></td><td><b>External Validity & Generalizability</b> <i>(you are here)</i></td><td>current</td></tr>
+<tr><td>6</td><td><a href="../module-06/slides.html">Multiple Testing & Subgroups</a></td><td>✓ done</td></tr>
+<tr><td><b>7</b></td><td><b>External Validity</b> <i>(you are here)</i></td><td>current</td></tr>
 <tr><td>8</td><td><a href="../module-08/slides.html">Beyond the A/B Test</a></td><td>✓ done</td></tr>
 </table>
 
@@ -534,6 +534,24 @@ In the exercise (`exercise.R`) you will:
 5. Compare multi-site vs single-site experimental designs
 
 See `exercise.R` for the starter code.
+
+---
+
+name: course-map-end
+
+# Course Map
+
+<table>
+<tr><th>#</th><th>Module</th><th>Status</th></tr>
+<tr><td>1</td><td><a href="../module-01/slides.html">The Experimental Ideal</a></td><td>✓ done</td></tr>
+<tr><td>2</td><td><a href="../module-02/slides.html">SUTVA and When It Breaks</a></td><td>✓ done</td></tr>
+<tr><td>3</td><td><a href="../module-03/slides.html">Designing Around Interference</a></td><td>✓ done</td></tr>
+<tr><td>4</td><td><a href="../module-04/slides.html">Power and Sample Size</a></td><td>✓ done</td></tr>
+<tr><td>5</td><td><a href="../module-05/slides.html">Analyzing Experiments</a></td><td>✓ done</td></tr>
+<tr><td>6</td><td><a href="../module-06/slides.html">Multiple Testing & Subgroups</a></td><td>✓ done</td></tr>
+<tr><td><b>7</b></td><td><b>External Validity</b> <i>(just finished)</i></td><td>✓ done</td></tr>
+<tr><td>8</td><td><a href="../module-08/slides.html">Beyond the A/B Test</a></td><td>✓ done</td></tr>
+</table>
 
 ---
 class: center, middle, inverse

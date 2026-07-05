@@ -86,9 +86,9 @@ set.seed(42)
 <tr><td>1</td><td><a href="../module-01/slides.html">The Experimental Ideal</a></td><td>✓ done</td></tr>
 <tr><td>2</td><td><a href="../module-02/slides.html">SUTVA and When It Breaks</a></td><td>✓ done</td></tr>
 <tr><td>3</td><td><a href="../module-03/slides.html">Designing Around Interference</a></td><td>✓ done</td></tr>
-<tr><td>4</td><td>Power and Sample Size</td><td>upcoming</td></tr>
+<tr><td>4</td><td><a href="../module-04/slides.html">Power and Sample Size</a></td><td>✓ done</td></tr>
 <tr><td>5</td><td><a href="../module-05/slides.html">Analyzing Experiments</a></td><td>✓ done</td></tr>
-<tr><td>6</td><td>Multiple Testing & Subgroups</td><td>upcoming</td></tr>
+<tr><td>6</td><td><a href="../module-06/slides.html">Multiple Testing & Subgroups</a></td><td>✓ done</td></tr>
 <tr><td>7</td><td><a href="../module-07/slides.html">External Validity</a></td><td>✓ done</td></tr>
 <tr><td><b>8</b></td><td><b>Beyond the A/B Test</b> <i>(you are here)</i></td><td>current</td></tr>
 </table>
@@ -850,6 +850,24 @@ For the read-now references behind today's slides:
 - **Wager & Athey (2018)** — *Estimation and inference of heterogeneous treatment effects using random forests*, JASA.
 - **Rambachan & Roth (2023)** — *A more credible approach to parallel trends*, ReStud.
 ]
+
+---
+
+name: course-map-end
+
+# Course Map
+
+<table>
+<tr><th>#</th><th>Module</th><th>Status</th></tr>
+<tr><td>1</td><td><a href="../module-01/slides.html">The Experimental Ideal</a></td><td>✓ done</td></tr>
+<tr><td>2</td><td><a href="../module-02/slides.html">SUTVA and When It Breaks</a></td><td>✓ done</td></tr>
+<tr><td>3</td><td><a href="../module-03/slides.html">Designing Around Interference</a></td><td>✓ done</td></tr>
+<tr><td>4</td><td><a href="../module-04/slides.html">Power and Sample Size</a></td><td>✓ done</td></tr>
+<tr><td>5</td><td><a href="../module-05/slides.html">Analyzing Experiments</a></td><td>✓ done</td></tr>
+<tr><td>6</td><td><a href="../module-06/slides.html">Multiple Testing & Subgroups</a></td><td>✓ done</td></tr>
+<tr><td>7</td><td><a href="../module-07/slides.html">External Validity</a></td><td>✓ done</td></tr>
+<tr><td><b>8</b></td><td><b>Beyond the A/B Test</b> <i>(just finished)</i></td><td>✓ done</td></tr>
+</table>
 
 ---
 
