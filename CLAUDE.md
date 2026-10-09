@@ -98,10 +98,13 @@ Each deck has a Course Map slide near the top (`# Course Map`) with hyperlinks t
 
 This is mechanical but easy to forget — search for `Designing Around Interference` (or whichever module title) to find them all.
 
-## Module status (as of this commit)
+## Module status
 
-- M1, M2, M3, M5, M7: rebuilt around the zone-notification thread, reviewed.
-- M4, M6, M8: drafted by agents in an earlier pass; still need a review pass to align with M3's setup and verify the simulations.
+Check `index.html` and the filesystem for current build status; don't trust a
+static list here. Review-debt note that IS worth keeping: M4, M6, M8 were
+drafted by agents in an earlier pass and still need a review pass to align with
+M3's setup and verify the simulations (M1, M2, M3, M5, M7 were rebuilt around
+the zone-notification thread and reviewed).
 
 ## Git workflow
 
